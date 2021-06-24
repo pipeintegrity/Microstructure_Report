@@ -1,0 +1,1052 @@
+---
+title: "Microstructure Analysis"
+author: "Nathan Switzner and Joel Anderson"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  html_document:
+    toc: TRUE
+    toc_float: TRUE
+    theme: journal
+    number_sections: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE)
+
+```
+
+```{r libraries and data}
+
+# load libraries ----------------------------------------------------------
+library(janitor)
+library(patchwork)
+library(tidyverse)
+library(readxl)
+library(lubridate)
+# library(DataCombine)
+library(tune)
+theme_set(theme_bw(16, "calibri")) #set theme to save typing
+# data import ----------------------------------------
+MICRO <- read_excel("Microstructure_Data_Collection_Online_2021_01_05_S5CJ.xlsx",
+                    sheet = "Collection2") %>% 
+mutate(Sample_Type = str_replace(Sample_Type, "-", "_"),
+       name = paste0(Group," ",Feature),
+       year = year(Evaluation_Date),
+       Path = str_remove(string = Path,pattern = ".jpg"),
+       Path = str_remove(string = Path, pattern = ".tif"))
+
+```
+
+```{r custom plot function}
+
+
+tp_plot <- function(df, x, y) {
+  ggplot(df, aes(x={{x}}, y={{y}})) +
+    geom_point(alpha = 0.6,
+               col = 'midnightblue',
+               size = 2) +
+    geom_abline(col = 'grey50', 
+                lty = 3, 
+                lwd = 1.2) +
+    tune::coord_obs_pred() +
+    geom_smooth(method = "lm", se=F)+
+    theme_bw(16, "serif")
+}
+
+```
+
+This report is automatically generated based on the data collection file produced by Pacific Gas and Electric (PG&E) Facilities Integrity Management Program (FIMP) microstructural analysis team. The microstructural analysis team regularly performs two types of analysis for microstructures: grain size and percent dark phase (pearlite) estimation. These two types of analysis are important inputs to strength, grade, and vintage estimation procedures. Two methods are used for each analysis: counting and comparison methods. The counting and comparison methods for grain size are based on the ASTM E112 Jeffries planimetric method and comparison method, respectively. The counting method for dark phase is based on ASTM E562, and the comparison method for dark phase estimation was developed by PG&E.
+
+# MLI GS and DP summary table
+
+For each pipe or fitting (Feature) from the ATS-ARBH and Modesto groups, the following table identifies the number of evaluations that have been performed (Count) and the the median, mean, and standard deviation (StDev).
+
+The purpose of this table is to review the data for the features that have already been evaluated and identify the features that require more evaluations. Some features may be missing from the list entirely, and should be assigned for evaluation.
+
+```{r}
+MICROTABLE_MLI = MICRO %>%
+  filter(Skip == "NoSkip") %>% 
+  filter(Analysis_Type == "Grain_Size") %>%
+  group_by(name, Sample_Type) %>%
+  summarize(
+    MLI_Count = n(),
+    MLI_Median = round(median(Mean_Linear_Intercept, na.rm = T), 1),
+    MLI_Mean = round(mean(Mean_Linear_Intercept, na.rm = T), 1),
+    MLI_StDev = round(sd(Mean_Linear_Intercept, na.rm = T), 1))
+
+# DT::datatable(MICROTABLE_MLI,filter="top",
+#              caption = "Mean linear intercept (MLI) (μm) Summary Table")
+```
+## Count of Evaluations by File Name  
+```{r filnema_count}
+MICRO %>% 
+  group_by(Path) %>% 
+  summarise(n=n()) %>% 
+  arrange(n) %>% 
+  DT::datatable(filter = "top", 
+                caption = "Number of Evaluations by Filename")
+
+```
+
+
+
+```{r TableDP1}
+
+MICROTABLE_DP = MICRO %>% 
+  filter(Skip == "NoSkip") %>% 
+  filter(Analysis_Type == "Dark_Phase") %>% 
+  group_by(name,Sample_Type) %>% 
+            summarize(
+            DP_Count = n(),
+            DP_Median = round(median(Pct_Dark_Phase,na.rm=T),1),
+            DP_Mean = round(mean(Pct_Dark_Phase,na.rm=T),1),
+            DP_StDev = round(sd(Pct_Dark_Phase,na.rm = T),1))
+
+# DT::datatable(MICROTABLE_DP,filter="top",
+#              caption = "Percent dark phase summary table")
+```
+
+```{r}
+MICROTABLE <- left_join(MICROTABLE_MLI,MICROTABLE_DP,
+          by = c("name", "Sample_Type"))
+
+DT::datatable(MICROTABLE,filter="top",
+              caption = "Percent dark phase summary table")
+```
+
+# Data for mean linear intercept (MLI) grain size (GS)
+
+There are two dimensions used frequently for describing grain size, ASTM grain size (GS) and mean linear intercept (MLI) GS. MLI GS will be used in this report because it relates to an actual physical dimension in the microstructure (mean distance between grain intersections for random lines drawn on the microstructure) and is reported herein in units of micrometers (μm). The ASTM GS sometimes enables better comparison of the standard deviation from large grain sizes to small grain sizes. Thus we will provide here the formulae to convert between MLI and ASTM GS as desired.
+
+ASTM E112 defines grain size number, G as $N_{AE}=2^{G-1}$ where $N_{AE}$ is the number of grains per square inch at 100X magnification. To obtain the number per square millimeter at 1X, multiply by 15.50. For relating ASTM grain size number, G, to mean linear intercept, L, ASTM E112 defines G such that G=0 when L=320 μm. Thus, $G=10-2*LOG_2(L/10)$ and $L=320*2^{-G/2}$ for L in micrometers (μm).
+
+The data identified as erroneous (selected to "skip") through the quality control (QC) process has been eliminated from this section.  
+
+## Evaluator Metrics  
+
+```{r monthly metrics plot, fig.width = 8}
+
+MICRO %>%
+  filter(year(Evaluation_Date) == year(Sys.Date()) - 1) %>%
+  # mutate(month = month.abb(month(Evaluation_Date))) %>%
+  group_by(eval = Evaluator_LANID,
+           month_num = month(Evaluation_Date)) %>%
+  summarise(n = n()) %>%
+  mutate(cumusum = cumsum(n), 
+         month = month.abb[month_num],
+         month = factor(month, levels = month.abb)) %>%
+  ggplot(aes(month_num, cumusum, col = eval)) +
+  geom_step(lwd = 1.2) +
+  theme_bw(16, "serif") +
+  scale_x_continuous(breaks = 1:12) +
+  scale_color_viridis_d(option = "C") +
+  labs(
+    title = paste("Cummulative Evaluations by ID for", year(Sys.Date()) - 1),
+    x = "Month",
+    y = "Cummulative Count",
+    color="Evaluator"
+  )
+  
+
+MICRO %>%
+  filter(year == 2021) %>%
+  # mutate(month = month.abb(month(Evaluation_Date))) %>%
+  group_by(eval = Evaluator_LANID,
+           month = month(Evaluation_Date)) %>%
+  summarise(n = n()) %>%
+  mutate(cumusum = cumsum(n)) %>%
+  ggplot(aes(month, cumusum)) +
+  geom_step(lwd = 1.2, aes(col = eval), position = "dodge") +
+  theme_bw(16, "serif") +
+  scale_x_continuous(breaks = 1:12) +
+  scale_color_viridis_d(option = "C") +
+  labs(
+    title = paste("Cummulative Evaluations by ID for", year(Sys.Date())),
+    x = "Month",
+    y = "Cummulative Count",
+    color="Evaluator"
+  )
+
+```
+
+
+## Evaluator Metrics Table 
+This table can be sorted by any field by clicking on the arrows at the column head.
+
+```{r eval_table}
+
+MICRO %>%
+  group_by(
+    ID = Evaluator_LANID,
+    year = year(Evaluation_Date),
+    month_num = month(Evaluation_Date)
+  ) %>%
+  filter(year == year(Sys.Date())) %>%
+  # factor(month, levels = month.abb))
+  summarise(n = n()) %>%
+  mutate(#cummulative = cumsum(n),
+    month = month.abb[month_num],
+    month = factor(month, levels = month.abb)) %>%
+  arrange(month) %>%
+  relocate(month, .before = n) %>%
+  pivot_wider(
+    names_from = month,
+    values_from = n,
+    id_cols = ID,
+    values_fn = sum
+  ) %>%
+  mutate(Total = sum(c_across(cols = everything()),
+                     na.rm = T)) %>%
+  # select(-month_num) %>%
+  DT::datatable()
+```
+
+## MLI GS for cross-sections
+
+This plot enables visualization of the data distribution. Interestingly, for grain sizes less than \~5 μm it appears that evaluators chose to rely the comparison method and avoid the counting methods.
+
+```{r GS9, fig.height=12, fig.width=6.5, fig.align='center', fig.cap = "ASTM GS evaluated for destructive cross-sections by the counting method."}
+
+MICRO %>%
+  # mutate(number = as.numeric(str_remove(Feature,"Feature "))) %>%
+  # reorder(nnumber) %>%
+  # arrange(number) %>%
+  filter(Skip == "NoSkip",
+         Sample_Type == "Cross_section",
+         Analysis_Type == "Grain_Size") %>%
+  # select(name,
+  #        # number,
+  #        Mean_Linear_Intercept) %>%
+  # na.omit() %>%
+  ggplot() +
+  geom_boxplot(aes(x = name, 
+                   y = Mean_Linear_Intercept, 
+                   fill = Method),
+               alpha = 0.75) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 25)) +
+  # scale_x_discrete(limits = name) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = expression("Mean linear intercept GS (" ~ mu ~ "m)")) +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = c(0.8, 0.075))
+
+```
+
+```{r GS10, fig.height=9, fig.width=6.5, fig.align='center', fig.cap= "ASTM GS evaluated for destructive cross-sections by the comparison method."}
+
+# MICRO %>%
+#   filter(Skip == "NoSkip") %>%
+#   filter(Analysis_Type == "Grain_Size") %>% 
+#   filter(Sample_Type == "Cross_section" &
+#            Method == "Comparison") %>%
+#   ggplot() +
+#   geom_boxplot(aes(x = name, y = Mean_Linear_Intercept),
+#                fill = "steelblue2",
+#                alpha = 0.75) +
+#   coord_flip()+
+#   scale_y_continuous(limits = c(0, 25)) +
+#   theme_bw() +
+#   labs(x = "Pipe or Fitting",
+#        y = expression("Mean linear intercept GS (" ~ mu ~ "m)")) +
+#   theme(axis.text.x = element_text(angle = 90))
+
+```
+
+## MLI GS for cross-sections (ascending order)
+
+The purpose of these plots is qualitative identification and comparison of the features with small and large grains between the two analysis methods.
+
+```{r GS11, fig.height=12, fig.width=6.5, fig.align='center', fig.cap= "ASTM GS evaluated for destructive cross-sections by the counting method (ascending sort)."}
+
+MICRO %>%
+  filter(Skip == "NoSkip",
+         Analysis_Type == "Grain_Size",
+         Sample_Type == "Cross_section") %>%
+  mutate(name = fct_reorder(name,
+                            Mean_Linear_Intercept,
+                            .fun = 'mean')) %>%
+  ggplot() +
+  geom_boxplot(aes(x = name,
+                   y = Mean_Linear_Intercept, fill = Method),
+               alpha = 0.75) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 25)) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = expression("Mean Linear Intercept GS (" ~ mu ~ "m)")) +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = c(0.8, 0.1))
+
+```
+
+```{r GS12, fig.height=9, fig.width=6, fig.align='center', fig.cap= "ASTM GS evaluated for destructive cross-sections by the comparison method (ascending sort)"}
+
+# MICRO %>%
+#   filter(
+#     Skip == "NoSkip",
+#     Analysis_Type == "Grain_Size",
+#     Sample_Type == "Cross_section",
+#     Method == "Comparison"
+#   ) %>%
+#   mutate(name = fct_reorder(name,
+#                             Mean_Linear_Intercept,
+#                             .fun = 'mean')) %>%
+#   ggplot() +
+#   geom_boxplot(aes(x = name,
+#                    y = Mean_Linear_Intercept),
+#                fill = "steelblue2",
+#                alpha = 0.75) +
+#   coord_flip() +
+#   scale_y_continuous(limits = c(0, 25)) +
+#   theme_bw() +
+#   labs(x = "Pipe or Fitting",
+#        y = expression("Mean linear intercept GS (" ~ mu ~ "m)")) +
+#   theme(axis.text.x = element_text(angle = 90))
+
+```
+
+## MLI GS for Replicas
+
+The purpose of these plots is visualization of the data distribution. It is interesting to note that for grain sizes less than \~5 μm it appears that evaluators opted to use the comparison method only and avoid using the counting methods.
+
+```{r GS13, fig.height=12, fig.width=6, fig.align='center', fig.cap="ASTM GS evaluated for microstructural replicas by the counting method."}
+
+MICRO %>%
+  filter(Skip == "NoSkip",
+         Analysis_Type == "Grain_Size",
+         Sample_Type == "Replica") %>%
+  ggplot() +
+  geom_boxplot(aes(x = name,
+                   y = Mean_Linear_Intercept,
+                   fill = Method),
+               alpha = 0.75) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 25)) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = expression("Mean linear intercept GS (" ~ mu ~ "m)")) +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = c(0.8, 0.05))
+
+```
+
+```{r GS14, fig.height=9, fig.width=6, fig.align='center', fig.cap="ASTM GS evaluated for microstructural replicas by the comparison method."}
+# 
+# MICRO %>%
+#   filter(Skip == "NoSkip") %>%
+#   filter(Analysis_Type == "Grain_Size") %>% 
+#   filter(Sample_Type == "Replica" & Method == "Comparison") %>%
+#   
+#   ggplot() +
+#   geom_boxplot(aes(x = name,
+#                    y = Mean_Linear_Intercept),
+#                fill = "steelblue2",
+#                alpha = 0.75) +
+#   coord_flip()+
+#   scale_y_continuous(limits = c(0, 25)) +
+#   theme_bw() +
+#   labs(x = "Pipe or Fitting",
+#        y = expression("Mean linear intercept GS (" ~ mu ~ "m)")) +
+#   theme(axis.text.x = element_text(angle = 90))
+
+
+```
+
+## MLI GS for Replicas (ascending order)
+
+The purpose of these plots is qualitative identification and comparison of the features with small and large grains between the two analysis methods.
+
+```{r GS15, fig.height=12, fig.width=6.5, fig.align='center', fig.cap="ASTM GS evaluated for microstructural replicas (ascending sort)"}
+
+MICRO %>%
+  filter(Skip == "NoSkip",
+         Analysis_Type == "Grain_Size",
+         Sample_Type == "Replica") %>%
+  
+  mutate(name = fct_reorder(name, Mean_Linear_Intercept, .fun = 'mean')) %>%
+  ggplot() +
+  geom_boxplot(
+    aes(x = name,
+        y = Mean_Linear_Intercept,
+        fill = Method),
+    alpha = 0.75
+  ) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 25)) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = expression("Mean linear intercept GS (" ~ mu ~ "m)")) +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = c(0.8, 0.1))
+
+```
+
+```{r GS16, fig.height=9, fig.width=6, fig.align='center', fig.cap="ASTM GS evaluated for microstructural replicas by the comparison method (ascending sort)."}
+
+# MICRO %>%
+#   filter(Skip == "NoSkip") %>%
+#   filter(Analysis_Type == "Grain_Size") %>%
+#   filter(Sample_Type == "Replica" & Method == "Comparison") %>%
+#   
+#   mutate(name = fct_reorder(name, Mean_Linear_Intercept, .fun = 'mean')) %>%
+#   ggplot() +
+#   geom_boxplot(
+#     mapping = aes(x = name,
+#                   y = Mean_Linear_Intercept),
+#     fill = "steelblue2",
+#     alpha = 0.75
+#   ) +
+#   coord_flip() +
+#   scale_y_continuous(limits = c(0, 25)) +
+#   theme_bw() +
+#   labs(x = "Pipe or Fitting",
+#        y = expression("Mean linear intercept GS (" ~ mu ~ "m)")) +
+#   theme(axis.text.x = element_text(angle = 90))
+
+```
+
+# Data for dark phase (DP)
+
+The data identified as erroneous (selected to "skip") through the quality control (QC) process has been eliminated from this section.
+
+## DP for cross-sections
+
+The purpose of these plots is visualization of the data distribution.
+
+```{r DP1, fig.height=12, fig.width=6.5, fig.align='center', fig.cap="DP (%) evaluated for destructive cross-sections"}
+
+MICRO %>%
+  filter(Skip == "NoSkip",
+  Analysis_Type == "Dark_Phase",
+  Sample_Type == "Cross_section") %>%
+  ggplot() +
+  geom_boxplot(aes(x = name,
+                   y = Pct_Dark_Phase,
+                   fill=Method),
+               alpha = 0.75) +
+  coord_flip()+
+  scale_y_continuous(limits = c(0, 60)) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = "Dark Phase (%)") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = c(0.8, 0.1))
+
+```
+
+```{r DP2, fig.height=9, fig.width=6, fig.align='center', fig.cap="DP (%) evaluated for destructive cross-sections by the comparison method."}
+
+# MICRO %>%
+#   filter(Skip == "NoSkip") %>%
+#   filter(Analysis_Type == "Dark_Phase") %>%
+#   filter(Sample_Type == "Cross_section" &
+#            Method == "Comparison") %>%
+#   ggplot() +
+#   geom_boxplot(aes(x = name,
+#                    y = Pct_Dark_Phase),
+#                fill = "steelblue2",
+#                alpha = 0.75) +
+#   coord_flip()+
+#   scale_y_continuous(limits = c(0, 60)) +
+#   theme_bw() +
+#   labs(x = "Pipe or Fitting",
+#        y = "Dark Phase (%)") +
+#   theme(axis.text.x = element_text(angle = 90))
+
+```
+
+## DP for cross-sections (ascending order)
+
+The purpose of these plots is qualitative identification and comparison of the features with a small or large amount of dark phase between the two analysis methods.
+
+```{r DP3, fig.height=12, fig.width=6.5, fig.align='center', fig.cap= "DP (%) evaluated for destructive cross-sections (ascending sort)"}
+
+
+MICRO %>%
+  filter(Skip == "NoSkip",
+         Analysis_Type == "Dark_Phase",
+         Sample_Type == "Cross_section") %>%
+  mutate(name = fct_reorder(name,
+                            Pct_Dark_Phase,
+                            .fun = 'mean')) %>%
+  ggplot() +
+  geom_boxplot(mapping = aes(x = name,
+                             y = Pct_Dark_Phase,
+                             fill = Method),
+               alpha = 0.75) +
+  coord_flip() +
+  # scale_y_continuous(limits = c(0, 60)) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = "Dark phase (%)") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = c(0.8, 0.1))
+
+```
+
+```{r DP4, fig.height=9, fig.width=6, fig.align='center', fig.cap= "DP (%) evaluated for destructive cross-sections by the comparison method (ascending sort)."}
+# 
+# MICRO %>%
+#   filter(Skip == "NoSkip") %>%
+#   filter(Analysis_Type == "Dark_Phase") %>%
+#   filter(Sample_Type == "Cross_section",
+#          Method == "Comparison") %>%
+#   
+#   mutate(name = fct_reorder(name,
+#                                Pct_Dark_Phase,
+#                                .fun = 'mean')) %>%
+#   ggplot() +
+#   geom_boxplot(aes(x = name,
+#                    y = Pct_Dark_Phase),
+#                fill = "steelblue2",
+#                alpha = 0.75) +
+#   coord_flip()+
+#   scale_y_continuous(limits = c(0, 60)) +
+#   theme_bw() +
+#   labs(x = "Pipe or Fitting",
+#        y = "Dark phase (%)") +
+#   theme(axis.text.x = element_text(angle = 90))
+
+```
+
+## DP for Replicas
+
+The purpose of these plots is visualization of the data distribution.
+
+```{r DP5, fig.height=12, fig.width=6.5, fig.align='center', fig.cap="DP (%) evaluated for replicas"}
+
+MICRO %>%
+  filter(Skip == "NoSkip",
+         Analysis_Type == "Dark_Phase",
+         Sample_Type == "Replica") %>%
+  
+  ggplot() +
+  geom_boxplot(aes(x = name,
+                   y = Pct_Dark_Phase,
+                   fill = Method),
+               alpha = 0.75) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 60)) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = "Dark Phase (%)") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = c(0.8, 0.1))
+
+```
+
+```{r DP6, fig.height=9, fig.width=6, fig.align='center', fig.cap="DP (%) evaluated for replicas by the comparison method."}
+
+# MICRO %>%
+#   filter(Skip == "NoSkip") %>%
+#   filter(Analysis_Type == "Dark_Phase") %>%
+#   filter(Sample_Type == "Replica",
+#          Method == "Comparison") %>%
+#   
+#   ggplot() +
+#   geom_boxplot(aes(x = name,
+#                    y = Pct_Dark_Phase),
+#                fill = "steelblue2",
+#                alpha = 0.75) +
+#   coord_flip()+
+#   scale_y_continuous(limits = c(0, 60)) +
+#   theme_bw() +
+#   labs(x = "Pipe or Fitting",
+#        y = "Dark Phase (%)") +
+#   theme(axis.text.x = element_text(angle = 90))
+
+```
+
+## DP for replicas (ascending order)
+
+The purpose of these plots is qualitative identification and comparison of the features with a small or large amount of dark phase between the two analysis methods.
+
+```{r DP7, fig.height=12, fig.width=6.5, fig.align='center', fig.cap= "DP (%) evaluated for replicas (ascending sort)"}
+
+MICRO %>%
+  filter(Skip == "NoSkip",
+         Analysis_Type == "Dark_Phase",
+         Sample_Type == "Replica") %>%
+  mutate(name = fct_reorder(name,
+                            Pct_Dark_Phase,
+                            .fun = 'mean')) %>%
+  ggplot() +
+  geom_boxplot(
+    mapping = aes(x = name,
+                  y = Pct_Dark_Phase,
+                  fill = Method),
+    alpha = 0.75
+  ) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 60)) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = "Dark phase (%)") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = c(0.8, 0.1))
+
+```
+
+```{r DP8, fig.height=9, fig.width=6, fig.align='center', fig.cap= "DP (%) evaluated for replicas by the comparison method (ascending sort)."}
+
+# MICRO %>%
+#   filter(Skip == "NoSkip") %>%
+#   filter(Analysis_Type == "Dark_Phase") %>%
+#   filter(Sample_Type == "Replica",
+#          Method == "Comparison") %>%
+#   mutate(name = fct_reorder(name,
+#                                Pct_Dark_Phase,
+#                                .fun = 'mean')) %>%
+#   ggplot() +
+#   geom_boxplot(aes(x = name,
+#                    y = Pct_Dark_Phase),
+#                fill = "steelblue2",
+#                alpha = 0.75) +
+#   coord_flip()+
+#   scale_y_continuous(limits = c(0, 60)) +
+#   theme_bw() +
+#   labs(title = "",
+#        x = "Pipe or Fitting",
+#        y = "Dark phase (%)") +
+#   theme(axis.text.x = element_text(angle = 90))
+
+     
+```
+
+# Method validation: comparison vs counting
+
+Since we are using both comparison methods and counting methods, it is important to validate that the two methods provide similar results.
+
+## MLI GS
+
+```{r compare 1}
+
+compare1 <- MICRO %>%
+  group_by(name, Method) %>%
+  summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
+  pivot_wider(names_from = Method, values_from = avg) %>%
+  ggplot(aes(Counting,
+             Comparison)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "counting",
+       y = "comparison") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+ labs(title = "Comparison vs counting for MLI GS (\u03BCm)", 
+       subtitle =  "Skips Included")+
+  coord_obs_pred()+
+  theme_bw(10, "calibri")
+
+```
+
+```{r compare 2}
+
+compare2 <- MICRO %>%
+  filter(Skip == "NoSkip") %>%
+  group_by(name, Method) %>%
+  summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
+  pivot_wider(names_from = Method, values_from = avg) %>%
+  ggplot(aes(Counting, Comparison)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "counting",
+       y = "comparison") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Comparison vs counting for MLI GS (\u03BCm)", 
+       subtitle =  "Skips Excluded")+
+  coord_obs_pred()+
+    theme_bw(10, "calibri")
+
+compare1 + compare2
+
+```
+
+  
+```{r fig.width = 8, fig.align = 'center', fig.cap= "Comparison vs counting for MLI GS (\u03BCm) by evaluator (skips included)"}
+
+MICRO %>%
+  group_by(name, Method, Evaluator_LANID) %>%
+  summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
+  pivot_wider(names_from = Method, values_from = avg) %>%
+  ggplot(aes(Counting, Comparison)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "counting",
+       y = "comparison") +
+  theme_bw() +
+  geom_abline(lwd = .5,
+              lty = 3,
+              col = 'black') +
+  facet_wrap(~ Evaluator_LANID) +
+  coord_obs_pred()+
+  theme(plot.margin = margin(0.5,0.5,0.5,0.5,"cm"))
+
+
+
+
+```
+  
+```{r  fig.width = 8, fig.align = 'center', fig.cap= "Comparison vs counting for MLI GS (\u03BCm) by evaluator (skips excluded)"}
+
+MICRO %>%
+  filter(Skip == "NoSkip") %>%
+  group_by(name, Method, Evaluator_LANID) %>%
+  summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
+  pivot_wider(names_from = Method, values_from = avg) %>%
+  ggplot(aes(Counting, Comparison)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "counting",
+       y = "comparison") +
+  theme_bw() +
+  geom_abline(lwd = .5,
+              lty = 3,
+              col = 'black') +
+  facet_wrap(~ Evaluator_LANID) +
+  coord_obs_pred()+
+  theme(plot.margin = margin(0.5,0.5,0.5,0.5,"cm"))
+
+```
+
+## Dark Phase
+
+The comparison method for dark phase is a method developed by PG&E, therefore is validated here vs the ASTM E562 counting method.
+  
+```{r compare3}
+
+compare3 <- MICRO %>%
+  group_by(name, Method) %>%
+  summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
+  pivot_wider(names_from = Method, values_from = avg) %>%
+  ggplot(aes(Counting, Comparison)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "counting",
+       y = "comparison") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Comparison vs Counting for DP (%)", 
+       subtitle = "Skips Included")+
+  coord_obs_pred()
+
+```
+  
+```{r compare4}
+
+compare4 <- MICRO %>%
+  filter(Skip == "NoSkip") %>%
+  group_by(name, Method) %>%
+  summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
+  pivot_wider(names_from = Method, values_from = avg) %>%
+  ggplot(aes(Counting, Comparison)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "counting",
+       y = "comparison") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Comparison vs Counting for DP (%)", 
+       subtitle = "Skips Excluded")+
+  coord_obs_pred()
+
+  compare3 + compare4
+  
+```
+  
+```{r fig.width=6.5,  fig.align='center', fig.cap= "Comparison vs counting for DP by evaluator (skips included)."}
+
+MICRO %>%
+  group_by(name, Sample_Type, Method, Evaluator_LANID) %>%
+  summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
+  pivot_wider(names_from = Method, values_from = avg) %>%
+  ggplot(aes(Counting, Comparison)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "counting",
+       y = "comparison") +
+  theme_bw() +
+  geom_abline(lwd = .5,
+              lty = 3,
+              col = 'black') +
+  facet_wrap(~ Evaluator_LANID) +
+  coord_obs_pred()+
+  theme(plot.margin = margin(0.5,0.5,0.5,0.5,"cm"))
+
+```
+  
+```{r fig.width=6.5,  fig.align='center', fig.cap= "Comparison vs counting for DP by evaluator (skips excluded)."}
+
+MICRO %>%
+  filter(Skip == "NoSkip") %>%
+  group_by(name, Sample_Type, Method, Evaluator_LANID) %>%
+  summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
+  pivot_wider(names_from = Method, values_from = avg) %>%
+  ggplot(aes(Counting, Comparison)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "counting",
+       y = "comparison") +
+  theme_bw() +
+  geom_abline(lwd = .5,
+              lty = 3,
+              col = 'black') +
+  facet_wrap(~ Evaluator_LANID) +
+  coord_obs_pred()
+
+```
+
+# Sample type validation: cross-section vs replica
+
+Since we are targeting the use of non-destructive methods for integrity management purposes, it is important to validate that the data from evaulations using replicas of the surface microstructure are similar to the data from evaluations using laboratory cross-sections of the pipes.
+
+## MLI GS
+
+```{r compare5}
+
+compare5 <- MICRO %>%
+  group_by(name, Sample_Type) %>%
+  summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
+  pivot_wider(names_from = Sample_Type, values_from = avg) %>%
+  ggplot(aes(Replica, Cross_section)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Replica",
+       y = "Cross-Section") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Destructive Cross-Section vs Replica",
+       subtitle =  "for MLI GS (\u03BCm) (Skips Included)") +
+  coord_obs_pred()
+
+```
+  
+```{r compare6}
+
+compare6 <- MICRO %>%
+  filter(Skip == "NoSkip") %>%
+  group_by(name, Sample_Type) %>%
+  summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
+  pivot_wider(names_from = Sample_Type, values_from = avg) %>%
+  ggplot(aes(Replica, Cross_section)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Replica",
+       y = "Cross-Section") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Destructive Cross-Section vs Replica",
+       subtitle =  "for MLI GS (\u03BCm) (Skips Excluded)") +
+  coord_obs_pred()
+
+compare5 + compare6
+
+```
+  
+```{r compare7}
+
+compare7 <- MICRO %>%
+  group_by(name, Sample_Type, Method) %>%
+  summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
+  pivot_wider(names_from = Sample_Type, values_from = avg) %>%
+  ggplot(aes(col = Method, Replica, Cross_section)) +
+  geom_point(alpha = 0.5,
+             show.legend = T) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Replica",
+       y = "Cross-Section") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Destructive Cross-Section vs Replica",
+       subtitle =  "for MLI GS (\u03BCm) (Skips Included)") +
+  coord_obs_pred() +
+  theme(legend.position = "bottom")
+
+```
+  
+```{r compare8}
+
+compare8 <- MICRO %>%
+  filter(Skip == "NoSkip") %>%
+  group_by(name, Sample_Type, Method) %>%
+  summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
+  pivot_wider(names_from = Sample_Type, values_from = avg) %>%
+  ggplot(aes(col = Method, Replica, Cross_section)) +
+  geom_point(alpha = 0.5,
+             show.legend = T) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Replica",
+       y = "Cross-Section") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Destructive Cross-Section vs Replica",
+       subtitle =  "for MLI GS (\u03BCm) (Skips Excluded)") +
+  coord_obs_pred() +
+  theme(legend.position = "bottom")
+
+compare7 + compare8
+
+```
+  
+## DP
+
+```{r compare9 }
+
+compare9 <- MICRO %>%
+  group_by(name, Sample_Type) %>%
+  summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
+  pivot_wider(names_from = Sample_Type, values_from = avg) %>%
+  ggplot(aes(Replica, Cross_section)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Replica",
+       y = "Cross-Section") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Destructive Cross-Section vs Replica",
+       subtitle =  "for DP (Skips Included)")+
+coord_obs_pred()
+
+```
+  
+```{r compare10}
+
+compare10 <- MICRO %>%
+  filter(Skip == "NoSkip") %>%
+  group_by(name, Sample_Type) %>%
+  summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
+  pivot_wider(names_from = Sample_Type, values_from = avg) %>%
+  ggplot(aes(Replica, Cross_section)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Replica",
+       y = "Cross-Section") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Destructive Cross-Section vs Replica",
+       subtitle =  "for DP (Skips Excluded)") +
+  coord_obs_pred()
+
+compare9 + compare10
+
+```
+  
+```{r compare11}
+
+compare11 <- MICRO %>%
+  group_by(name, Sample_Type, Method) %>%
+  summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
+  pivot_wider(names_from = Sample_Type, values_from = avg) %>%
+  ggplot(aes(col = Method,
+             Replica,
+             Cross_section)) +
+  geom_point(alpha = 0.5,
+             show.legend = T) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Replica",
+       y = "Cross-Section") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Destructive Cross-Section vs Replica",
+       subtitle = "for DP (Skips Included)")+
+coord_obs_pred() +
+  theme(legend.position = "bottom")
+
+```
+  
+```{r compare12}
+
+compare12 <- MICRO %>%
+  filter(Skip == "NoSkip") %>%
+  group_by(name, Sample_Type, Method) %>%
+  summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
+  pivot_wider(names_from = Sample_Type, values_from = avg) %>%
+  ggplot(aes(col = Method,
+             Replica,
+             Cross_section)) +
+  geom_point(alpha = 0.5,
+             show.legend = T) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Replica",
+       y = "Cross-Section") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Destructive Cross-Section vs Replica",
+       subtitle = "for DP (Skips Excluded)") +
+  coord_obs_pred() +
+  theme(legend.position = "bottom")
+
+compare11 + compare12
+
+```
+  
+# Quality control skips and reasons
+
+The purpose of this table is for evaluators to identify their common errors and self correct.
+
+```{r skiptable}
+
+SKIPTABLE = MICRO %>%
+  filter(Skip == "Skip") %>%
+  select(
+    Evaluator_LANID,
+    Evaluation_Date,
+    Path,
+    Method,
+    Pct_Dark_Phase,
+    Mean_Linear_Intercept,
+    Skip_Reason
+  ) %>%
+  rename(
+    Evaluator = Evaluator_LANID,
+    Date = Evaluation_Date,
+    DP_pct = Pct_Dark_Phase,
+    MLI_GS = Mean_Linear_Intercept
+  ) %>%
+  mutate(MLI_GS = round(MLI_GS, 1),
+         Date = ymd(Date)) %>%
+  arrange(Evaluator,
+          Date)
+
+DT::datatable(SKIPTABLE, filter = "top",
+              caption = "List of evaluation errors selected to skip")
+```
