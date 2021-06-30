@@ -24,7 +24,7 @@ library(tidyverse)
 library(readxl)
 library(lubridate)
 # library(DataCombine)
-library(tune)
+library(tidymodels)
 theme_set(theme_bw(16, "calibri")) #set theme to save typing
 # data import ----------------------------------------
 MICRO <- read_excel("Microstructure_Data_Collection_Online_2021_01_05_S5CJ.xlsx",
@@ -33,7 +33,7 @@ mutate(Sample_Type = str_replace(Sample_Type, "-", "_"),
        name = paste0(Group," ",Feature),
        year = year(Evaluation_Date),
        Path = str_remove(string = Path,pattern = ".jpg"),
-       Path = str_remove(string = Path, pattern = ".tif"))
+       Path = str_remove(string = Path, pattern = ".tif")) 
 
 ```
 
@@ -64,7 +64,7 @@ For each pipe or fitting (Feature) from the ATS-ARBH and Modesto groups, the fol
 The purpose of this table is to review the data for the features that have already been evaluated and identify the features that require more evaluations. Some features may be missing from the list entirely, and should be assigned for evaluation.
 
 ```{r}
-MICROTABLE_MLI = MICRO %>%
+MICROTABLE_MLI <-  MICRO %>%
   filter(Skip == "NoSkip") %>% 
   filter(Analysis_Type == "Grain_Size") %>%
   group_by(name, Sample_Type) %>%
@@ -1050,3 +1050,391 @@ SKIPTABLE = MICRO %>%
 DT::datatable(SKIPTABLE, filter = "top",
               caption = "List of evaluation errors selected to skip")
 ```
+
+
+## Correlations  
+```{r ,warning=FALSE}
+comp <-
+  read_excel("~/RSI/ChemistryGrade/MasterDB-SQL-2020-09-24.xlsx",
+             sheet = "Composition") %>%
+  janitor::clean_names() %>%
+  filter(skip==FALSE) %>%
+  select(group, feature, c:p) %>%
+  group_by(group, feature) %>%
+  mutate(across(.cols = c:p, as.numeric)) %>%
+  summarise(across(.cols = c:p, ~mean(.x, na.rm=T)))
+
+
+# IIT data ----------------------------------------------------------------
+
+ndt <-
+ read_excel("~/RSI/ChemistryGrade/MasterDB-SQL-2020-09-24.xlsx",
+             sheet = "NDT") %>%
+  janitor::clean_names() %>%
+  rename(group = group_name) %>%
+  filter(
+    skip == FALSE,
+    group != "Calibration Blocks",
+    str_detect(
+      "Old",
+      negate = T,
+      vendor_test_area_label),
+      reader_method == "DPT",
+      vendor %in% c('ATS', 'TDW')
+    ) %>%
+      group_by(group, feature) %>%
+      summarise(
+        iitys_5 = mean(x0_5_percent_eul_ys_ksi, na.rm = T),
+        iituts = mean(uts_ksi, na.rm = T),
+        nsamples = n()
+      ) %>%
+      filter(nsamples >= 10
+      )
+
+
+# Tensile data ------------------------------------------------------------
+
+
+tensile <-
+read_excel("~/RSI/ChemistryGrade/MasterDB-SQL-2020-09-24.xlsx",
+             sheet = "Tensile") %>%
+  janitor::clean_names() %>%
+  filter(skip == FALSE ,
+         type != "Weld" ,
+         type != "GirthWeldStrip" ,
+         group != "Calibration Blocks") %>%
+  rename(ys5 = x0_5_percent_eul_ys_ksi,
+         uts = uts_ksi) %>%
+  group_by(group, feature) %>%
+  summarise(ten_ys = mean(ys5, na.rm = T),
+            ten_uts = mean(uts, na.rm = T))
+
+## Charpy data ----------------------------------------------------------
+
+ECA_WT <- read_excel("~/RSI/ChemistryGrade/MasterDB-SQL-2020-09-24.xlsx",
+                     sheet = "Wall Thickness")  %>%
+  clean_names() %>%
+  filter(str_detect(location_type, "AFG", negate = T)) %>%  #remove any wall thickness measurements after grind
+  group_by(group, feature) %>%
+  summarize(wt_in = mean(measurement_in, na.rm = T)) %>%
+  select(group,
+         feature,
+         wt_in)
+
+ECA_CVN <- read_excel("~/RSI/ChemistryGrade/MasterDB-SQL-2020-09-24.xlsx",
+                         sheet = "Charpy")  %>%
+  clean_names() %>% 
+  full_join(ECA_WT, by= c("group", "feature")) %>% 
+  filter(str_detect(location, "Base")) %>% #removing weld tests
+  mutate(
+    SA_SS = ifelse(shear_area_percent==100, 0.99,shear_area_percent/ 100),
+    t_ss_in = charpy_size_mm / 25.4,
+    #calc subsize charpy thickness in inches
+    sigB = (-12.736) * (t_ss_in / .394) ^ 2 +
+      39.984 * (t_ss_in / 0.394) + 4.6897,
+    #calc sigmoidal parameter B
+    sigA = (-21.812) * (t_ss_in / 0.394) ^ 2 + 68.279 * (t_ss_in / 0.394) +
+      8.4349,
+    #calc sigmoidal parameter A
+    TT_SS_F =  (temperature_f - sigB * log(SA_SS /
+                                          (1 - SA_SS)) + sigA) * 0.95 ,
+    TT_FS_F = TT_SS_F + 66 * (wt_in ^ 0.55) *
+      (t_ss_in ^ (-.7) - 0.394 ^ (-.7)),
+    
+    CVN_SS = absorbed_energy_ft_lbs,
+    #rename subsize CVN
+    
+    #calc subsize shear area and rename
+    CVN_US_SS = CVN_SS / (0.9 * SA_SS + 0.1),
+    #calc subsize CVN upper shelf energy from subsize CVN and subsize shear area
+    CVN_US_FS = CVN_US_SS * 0.394 / t_ss_in
+    #calc fullsize CVN upper shelf energy
+  ) %>%
+  group_by(group, feature) %>%
+  summarize(
+    CVN_US_FS = mean(CVN_US_FS, na.rm = T),
+    TT_FS_F = mean(TT_FS_F, na.rm = T)
+  ) %>%
+  select("group", "feature", "CVN_US_FS", "TT_FS_F")
+#-------------------------------------------------------------------------
+micro <- MICRO %>%
+  rename(group = Group,
+         feature = Feature,
+         polygonal =`Polygonal ferrite grains that are relatively distinct and free of dots, lines or cloudy features.`) %>% 
+  janitor::clean_names() %>% 
+  group_by(group, feature, method) %>% 
+  select(astm_grain_size, mean_linear_intercept,pct_dark_phase) %>% 
+  summarise(astm_grain_size=mean(astm_grain_size, na.rm=T),
+         mean_linear_intercept = mean(mean_linear_intercept, na.rm=T),
+         pct_dark_phase = mean(pct_dark_phase, na.rm=T)
+         ) %>% 
+  ungroup()
+
+## Coombine the data -----------------------------------------------------
+ndt_ten_comp <- ndt %>%
+  full_join(comp,
+            by = c("group", "feature")) %>%
+  full_join(tensile,
+            by = c("group", "feature")) %>%
+  full_join(ECA_CVN, 
+            by = c("group", "feature")) %>% 
+  full_join(micro, 
+            by = c("group", "feature")) %>% 
+  ungroup()
+```
+
+## MLI plots  
+```{r}
+
+lm_model <-
+  linear_reg() %>%
+  set_mode("regression") %>%
+  set_engine("lm")
+
+complete <- ndt_ten_comp %>%
+  select(CVN_US_FS,
+         ten_ys,
+         iitys_5,
+         c,
+         mn,
+         s,
+         si,
+         p,
+         mean_linear_intercept,
+         astm_grain_size,
+         pct_dark_phase,
+         method) %>%
+  rename(ags = astm_grain_size,
+         pdp = pct_dark_phase,
+         mli = mean_linear_intercept) %>%
+  drop_na() 
+
+
+ys_rec <-
+  recipe(ten_ys ~ iitys_5+ c + mn + s + si + p + ags + pdp + mli,
+         data = complete) %>%
+  step_center(all_predictors()) %>%
+  # step_scale(all_predictors()) %>%
+  step_interact(terms = ~ c(mn:c, ags:pdp, c:si)) %>%
+  prep() #retain data =TRUE is default
+
+ys_bake <- bake(ys_rec, new_data = NULL)
+
+# fit the model
+fitted_m <-  fit(lm_model,
+                 formula = ten_ys ~ iitys_5 + mn * c + ags ,
+                 data = ys_bake)
+
+
+fitted_mnc <- fit(lm_model,
+                  formula = ten_ys ~ iitys_5 + si + ags ,
+                  data = ys_bake)
+
+glance(fitted_mnc)
+summary(fitted_mnc$fit)
+
+glance(fitted_m)
+# fitted_iit$fit# fitted model object
+
+#extract coefficients
+tidy_iit <- tidy(fitted_mnc, conf.int=T) %>% 
+  mutate(model ="IIT") 
+
+#extract performance metrics
+# iit_glance <- glance(fitted_iit$fit) %>%
+#   mutate(model ="IIT") %>% 
+#   relocate(model)
+
+#attach the preidcted values to the original data
+ys_aug <- augment(fitted_mnc$fit,interval = "prediction") %>%
+  mutate(model="IIT")
+
+
+```
+ 
+```{r iit-regress, fig.cap="Regression Results"}
+# ys_aug %>%
+#   # pivot_longer(cols = c(.fitted_iit, .fitted_comp)) %>%
+#   ggplot(aes(y = ten_ys, x = .fitted)) +
+#   geom_jitter(width = 0.1, 
+#               height = 0.1,
+#               alpha = 0.65, 
+#               col = 'midnightblue') +
+#   coord_obs_pred() +
+#   geom_abline(lty = 2, col = 'grey50') +
+#   geom_smooth(method = "lm", se = T, col='orange') +
+#   scale_color_brewer(type = "div", palette = "Set1") +
+#   labs(title = "IIT Only Model Observed vs. Predicted",
+#        x = "Predicted Tensile (ksi)",
+#        y = "Observed Tensile (ksi)",caption = "ys ~ mn + c+ iit + grain_size")
+
+```
+
+```{r cvn_vs_mli}
+
+ndt_ten_comp %>% 
+  ggplot(aes(sqrt(mean_linear_intercept),CVN_US_FS))+
+  geom_point()+
+  geom_smooth(method = "lm", se=F)
+
+cvn_rec <-
+  recipe(CVN_US_FS ~ iitys_5+ c + mn + s + si + p + ags + pdp + mli,
+         data = complete) %>%
+  step_center(all_predictors(),-mli) %>%
+  # step_scale(all_predictors()) %>%
+  step_interact(terms = ~ c(mn:c, ags:pdp, c:si)) %>%
+  prep() #retain data =TRUE is default
+
+cvn_bake <- bake(cvn_rec, new_data = NULL)
+
+
+mli_lm <- lm(CVN_US_FS ~ sqrt(mli), data = complete)
+
+mli_lm2 <- update(mli_lm, . ~ . + mn)# no good
+mli_lm3 <- update(mli_lm, . ~ . + mn:c) # significant
+mli_lm4 <- update(mli_lm, . ~ . + pdp/ags + c) # no good
+mli_lm5 <- update(mli_lm, . ~ . + pdp/ags + c:s)
+
+models <-list(mli_lm, mli_lm2, mli_lm3, mli_lm4, mli_lm5)
+
+mli_lm6 <- complete %>% 
+  select(CVN_US_FS, pdp, ags, c,s, mli, method) %>% 
+  nest(c(-method)) %>% 
+  mutate(fit = map(data, ~lm(CVN_US_FS ~ sqrt(mli)+pdp/ags + c:s, data = .x)),
+         glanced = map(fit, glance),
+         tidied = map(fit, tidy)
+         )
+
+modelsummary::modelsummary(models)
+
+mli_lm6 %>% 
+  select(glanced) %>% 
+  unnest(glanced) %>% 
+  mutate(method=c("Comparison", "Counting")) %>% 
+  relocate(method) %>% 
+  select(method:sigma,-p.value, deviance) %>% 
+  mutate(across(.cols = c(2:5), ~ round(.x,2))) %>% 
+  flextable::flextable()
+
+```
+
+```{r plots of cvn model}
+mli_aug <- augment(mli_lm4, newdata=complete)
+mli_aug2 <- augment(mli_lm5, newdata=complete)
+
+sulfur <- mli_aug2 %>% 
+  ggplot(aes(.fitted,CVN_US_FS))+
+  geom_point(aes(col=method), alpha=0.5)+
+  geom_abline(lty=2, col='grey50')+
+  coord_obs_pred()+
+  scale_color_brewer(type = "div",palette = "Set1")+
+   labs(title = "Observed CVN vs. Predicted",
+       x="Predicted CVN (ft-lb)",
+       y = "Full-Size US CVN (ft-lb)",
+       caption = "Model: CVN ~ (MLI)^0.5 + DP + AGS:DP + C:S",
+       color="Method")
+
+carbon <- mli_aug %>% 
+  ggplot(aes(.fitted,CVN_US_FS))+
+  geom_point(aes(col=method), alpha=0.5)+
+  geom_abline(lty=2, col='grey50')+
+  coord_obs_pred()+
+  scale_color_brewer(type = "div",palette = "Set1")+
+   labs(title = "Observed CVN vs. Predicted",
+       x="Predicted CVN (ft-lb)",
+       y = "Full-Size US CVN (ft-lb)",
+       caption = "Model: CVN ~ (MLI)^0.5 + DP + AGS:DP + C",
+       color="Method")
+
+library(patchwork)
+
+sulfur +carbon
+```
+
+
+
+```{r grain_size}
+
+gs_lm <- lm(CVN_US_FS ~ astm_grain_size,data = ndt_ten_comp) #signficant
+
+gs_lm2 <- update(gs_lm, .~. +sqrt(mean_linear_intercept)) #no good
+
+gs_lm3 <- update(gs_lm, .~. + s +pct_dark_phase) #no good, mn doesn't change
+summary(gs_lm3)
+
+gs_lm4 <- update(gs_lm, .~. + c) # good, carbon p-value =.02 
+
+glance(gs_lm3)
+glance(gs_lm4)
+
+summary(gs_lm4)
+
+
+gs_aug <- augment(gs_lm4, complete)
+
+library(rstanarm)
+options(mc.cores = parallel::detectCores())
+
+stan_gs <- stan_glm(CVN_US_FS ~ ags + pdp, data = cvn_bake)
+stan_gs2 <- stan_glm(CVN_US_FS ~ pdp + c, data = cvn_bake)
+stan_gs3 <- stan_glm(CVN_US_FS ~ ags + c, data = cvn_bake)
+stan_gs4 <- stan_glm(CVN_US_FS ~ ags:pdp + pdp, data = cvn_bake)
+stan_gs5 <- stan_glm(CVN_US_FS ~ ags:pdp + pdp + si, data = cvn_bake)
+
+print(stan_gs)
+print(stan_gs2)
+print(stan_gs3)
+print(stan_gs4)
+print(stan_gs5)
+summary(stan_gs4)
+
+plot(stan_gs, plotfun = "areas", prob=0.95,pars = "pdp")+
+  labs(title = "Uncertainty for Carbon Coefficient")
+
+bayesplot::mcmc_areas_ridges(stan_gs)+labs(title = "Main Title")
+
+
+```
+
+
+```{r}
+.fitted <- predict(stan_gs4,newdata = cvn_bake)
+
+stan_aug <- bind_cols(cvn_bake, .fitted =.fitted)
+
+stan_aug %>% 
+  ggplot(aes(.fitted, CVN_US_FS))+
+  geom_point(col='orangered')+
+  geom_abline(lty=2, col='grey50')+
+  coord_obs_pred()+
+  labs(title = "Observed CVN vs. Predicted",
+       x="Predicted CVN (ft-lb)",
+       y = "Full-Size US CVN (ft-lb)",
+       caption = "Model: CVN ~ DP + AGS:DP")
+```
+
+
+```{r interaction plot}
+complete %>% 
+  pivot_longer(-CVN_US_FS) %>% 
+  ggplot(aes(value, CVN_US_FS))+
+  geom_point(aes(col=name), show.legend = F)+
+  facet_wrap( ~ name, scales = "free_x")+
+  geom_smooth(method = "lm", se=F)
+
+```
+
+
+```{r plot_grain_size}
+gs_aug %>% 
+   ggplot(aes(.fitted,CVN_US_FS))+
+  geom_point(col='orangered')+
+  geom_abline(lty=2, col='grey50')+
+  coord_obs_pred()+
+  annotate("text", x= 75, y = 250,label=expression(R^2 ~ "= 0.57"), size=5)+
+  labs(title = "Observed CVN vs. Predicted",
+       caption = "Model: CVN ~ ASTM_GS + C",
+       x="Predicted")
+
+```
+
