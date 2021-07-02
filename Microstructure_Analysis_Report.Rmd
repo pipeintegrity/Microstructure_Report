@@ -25,7 +25,7 @@ library(readxl)
 library(lubridate)
 # library(DataCombine)
 library(tidymodels)
-theme_set(theme_bw(16, "calibri")) #set theme to save typing
+theme_set(theme_bw(16)) #set theme to save typing
 # data import ----------------------------------------
 MICRO <- read_excel("Microstructure_Data_Collection_Online_2021_01_05_S5CJ.xlsx",
                     sheet = "Collection2") %>% 
@@ -1053,7 +1053,7 @@ DT::datatable(SKIPTABLE, filter = "top",
 
 
 ## Correlations  
-```{r ,warning=FALSE}
+```{r ECA info,warning=FALSE}
 comp <-
   read_excel("~/RSI/ChemistryGrade/MasterDB-SQL-2020-09-24.xlsx",
              sheet = "Composition") %>%
@@ -1184,7 +1184,7 @@ ndt_ten_comp <- ndt %>%
 ```
 
 ## MLI plots  
-```{r}
+```{r mli plots}
 
 lm_model <-
   linear_reg() %>%
@@ -1204,6 +1204,7 @@ complete <- ndt_ten_comp %>%
          astm_grain_size,
          pct_dark_phase,
          method) %>%
+  mutate(sr_mli=sqrt(mean_linear_intercept)) %>% 
   rename(ags = astm_grain_size,
          pdp = pct_dark_phase,
          mli = mean_linear_intercept) %>%
@@ -1280,20 +1281,20 @@ ndt_ten_comp %>%
 cvn_rec <-
   recipe(CVN_US_FS ~ iitys_5+ c + mn + s + si + p + ags + pdp + mli,
          data = complete) %>%
-  step_center(all_predictors(),-mli) %>%
+  step_center(all_predictors()) %>%
   # step_scale(all_predictors()) %>%
-  step_interact(terms = ~ c(mn:c, ags:pdp, c:si)) %>%
+  step_interact(terms = ~ c(mn:c, ags:pdp, c:si, c:s, ags:mli)) %>%
   prep() #retain data =TRUE is default
 
 cvn_bake <- bake(cvn_rec, new_data = NULL)
 
 
-mli_lm <- lm(CVN_US_FS ~ sqrt(mli), data = complete)
+mli_lm <- lm(CVN_US_FS ~ mli, data = cvn_bake)
 
-mli_lm2 <- update(mli_lm, . ~ . + mn)# no good
-mli_lm3 <- update(mli_lm, . ~ . + mn:c) # significant
-mli_lm4 <- update(mli_lm, . ~ . + pdp/ags + c) # no good
-mli_lm5 <- update(mli_lm, . ~ . + pdp/ags + c:s)
+mli_lm2 <- update(mli_lm, . ~ . + iitys_5)# no good
+mli_lm3 <- update(mli_lm, . ~ . + ags:mli) # significant
+mli_lm4 <- update(mli_lm, . ~ . + pdp*ags + c) # no good
+mli_lm5 <- update(mli_lm, . ~ . + pdp*ags + s)
 
 models <-list(mli_lm, mli_lm2, mli_lm3, mli_lm4, mli_lm5)
 
@@ -1304,6 +1305,7 @@ mli_lm6 <- complete %>%
          glanced = map(fit, glance),
          tidied = map(fit, tidy)
          )
+tidy_pre
 
 modelsummary::modelsummary(models)
 
@@ -1319,8 +1321,8 @@ mli_lm6 %>%
 ```
 
 ```{r plots of cvn model}
-mli_aug <- augment(mli_lm4, newdata=complete)
-mli_aug2 <- augment(mli_lm5, newdata=complete)
+mli_aug <- augment(mli_lm4, newdata=cvn_bake) %>% mutate(method = complete$method)
+mli_aug2 <- augment(mli_lm5, newdata=cvn_bake) %>% mutate(method = complete$method)
 
 sulfur <- mli_aug2 %>% 
   ggplot(aes(.fitted,CVN_US_FS))+
@@ -1331,7 +1333,7 @@ sulfur <- mli_aug2 %>%
    labs(title = "Observed CVN vs. Predicted",
        x="Predicted CVN (ft-lb)",
        y = "Full-Size US CVN (ft-lb)",
-       caption = "Model: CVN ~ (MLI)^0.5 + DP + AGS:DP + C:S",
+       caption = "Model: CVN ~ MLI + AGS:DP + S",
        color="Method")
 
 carbon <- mli_aug %>% 
@@ -1343,12 +1345,12 @@ carbon <- mli_aug %>%
    labs(title = "Observed CVN vs. Predicted",
        x="Predicted CVN (ft-lb)",
        y = "Full-Size US CVN (ft-lb)",
-       caption = "Model: CVN ~ (MLI)^0.5 + DP + AGS:DP + C",
+       caption = "Model: CVN ~ MLI + AGS:DP + C",
        color="Method")
 
 library(patchwork)
 
-sulfur +carbon
+sulfur + carbon
 ```
 
 
