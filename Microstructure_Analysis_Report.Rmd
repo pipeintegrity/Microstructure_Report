@@ -26,6 +26,7 @@ library(lubridate)
 library(patchwork)
 # library(DataCombine)
 library(tidymodels)
+# library(rstanarm)
 theme_set(theme_bw(16)) #set theme to save typing
 # data import ----------------------------------------
 MICRO <- read_excel("Microstructure_Data_Collection_Online_2021_01_05_S5CJ.xlsx",
@@ -1053,14 +1054,14 @@ DT::datatable(SKIPTABLE, filter = "top",
 ```
 
 
-## Correlations  
+# Correlations  
 ```{r ECA info,warning=FALSE}
 # Composition ------------------------------------------------------------
 
 comp <-
-  read_excel("~/RSI/ChemistryGrade/MasterDB-SQL-2020-09-24.xlsx",
+  read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
              sheet = "Composition") %>%
-  janitor::clean_names() %>%
+   janitor::clean_names() %>%
   filter(skip==FALSE) %>%
   select(group, feature, c:p) %>%
   group_by(group, feature) %>%
@@ -1070,7 +1071,7 @@ comp <-
 # Feature data -----------------------------------------------------------
 
 feature <-
-  read_excel("~/RSI/ChemistryGrade/MasterDB-SQL-2020-09-24.xlsx",
+  read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
              sheet = "Features") %>%
   janitor::clean_names() %>% 
   rename(feature = feature_id)
@@ -1078,7 +1079,7 @@ feature <-
 # IIT data ----------------------------------------------------------------
 
 ndt <-
- read_excel("~/RSI/ChemistryGrade/MasterDB-SQL-2020-09-24.xlsx",
+ read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
              sheet = "NDT") %>%
   janitor::clean_names() %>%
   rename(group = group_name) %>%
@@ -1106,7 +1107,7 @@ ndt <-
 
 
 tensile <-
-read_excel("~/RSI/ChemistryGrade/MasterDB-SQL-2020-09-24.xlsx",
+read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
              sheet = "Tensile") %>%
   janitor::clean_names() %>%
   filter(skip == FALSE ,
@@ -1121,7 +1122,7 @@ read_excel("~/RSI/ChemistryGrade/MasterDB-SQL-2020-09-24.xlsx",
 
 # Wall Thickness -----------------------------------------------------
 
-ECA_WT <- read_excel("~/RSI/ChemistryGrade/MasterDB-SQL-2020-09-24.xlsx",
+ECA_WT <- read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
                      sheet = "Wall Thickness")  %>%
   clean_names() %>%
   filter(str_detect(location_type, "AFG", negate = T)) %>%  
@@ -1134,7 +1135,7 @@ ECA_WT <- read_excel("~/RSI/ChemistryGrade/MasterDB-SQL-2020-09-24.xlsx",
 
 ## Charpy data ----------------------------------------------------------       
 
-ECA_CVN <- read_excel("~/RSI/ChemistryGrade/MasterDB-SQL-2020-09-24.xlsx",
+ECA_CVN <- read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
                          sheet = "Charpy")  %>%
   clean_names() %>% 
   full_join(ECA_WT, by= c("group", "feature")) %>% 
@@ -1403,7 +1404,7 @@ lm_glance <- glance(mli_lm4) %>% mutate(model = "lm")
 rlm_glance
 lm_glance
 
-bind_rows(rlm_glance,lm_glance) 
+# bind_rows(rlm_glance,lm_glance) 
 
 rlm_aug <- augment(rlm_mli,
                    data = cvn_bake,
@@ -1415,18 +1416,18 @@ rq_aug <- augment(rq_mli,
                    interval = "confidence") %>%
   mutate(method = complete$method, model ="RQ")
 
-mli_pls <- plsr(
-  CVN_US_FS ~ mli + pdp * ags + c,
-  data = cvn_bake,
-  scale = TRUE,
-  validation = "CV"
-)
+# mli_pls <- plsr(
+#   CVN_US_FS ~ mli + pdp * ags + c,
+#   data = cvn_bake,
+#   scale = TRUE,
+#   validation = "CV"
+# )
 
-pcr_pred <- predict(mli_pls, ncomp = 2)
+# pcr_pred <- predict(mli_pls, ncomp = 2)
 
-pls_aug <- cbind(complete, pcr_pred) %>%
-  rename(.fitted = 'CVN_US_FS.2 comps') %>%
-  mutate(model = "PLS")
+# pls_aug <- cbind(complete, pcr_pred) %>%
+#   rename(.fitted = 'CVN_US_FS.2 comps') %>%
+#   mutate(model = "PLS")
 
 rlm_aug %>% 
   bind_rows(mli_aug) %>% 
@@ -1454,89 +1455,89 @@ rlm_aug %>%
 
 
 ```{r grain_size}
-
-gs_lm <- lm(CVN_US_FS ~ astm_grain_size,data = ndt_ten_comp) #signficant
-
-gs_lm2 <- update(gs_lm, .~. +sqrt(mean_linear_intercept)) #no good
-
-gs_lm3 <- update(gs_lm, .~. + s +pct_dark_phase) #no good, mn doesn't change
-summary(gs_lm3)
-
-gs_lm4 <- update(gs_lm, .~. + c) # good, carbon p-value =.02 
-
-glance(gs_lm3)
-glance(gs_lm4)
-
-summary(gs_lm4)
-
-
-gs_aug <- augment(gs_lm4, complete)
-
-library(rstanarm)
-options(mc.cores = parallel::detectCores())
-
-stan_gs <- stan_glm(CVN_US_FS ~ ags + pdp, data = cvn_bake)
-stan_gs2 <- stan_glm(CVN_US_FS ~ pdp + c, data = cvn_bake)
-stan_gs3 <- stan_glm(CVN_US_FS ~ pdp:mli+ pdp + c, data = cvn_bake)
-stan_gs4 <- stan_glm(CVN_US_FS ~ pdp:mli + pdp +s, data = cvn_bake)
-stan_gs5 <- stan_glm(CVN_US_FS ~ ags:pdp + pdp + si, data = cvn_bake)
-
-print(stan_gs)
-print(stan_gs2)
-print(stan_gs3)
-print(stan_gs4)
-print(stan_gs5)
-summary(stan_gs4)
-
-plot(stan_gs3, plotfun = "areas", prob=0.95, pars = "c")+
-  labs(title = "Uncertainty for Carbon Coefficient")
-
-bayesplot::mcmc_areas_ridges(stan_gs4)+labs(title = "Main Title")
+# 
+# gs_lm <- lm(CVN_US_FS ~ astm_grain_size,data = ndt_ten_comp) #signficant
+# 
+# gs_lm2 <- update(gs_lm, .~. +sqrt(mean_linear_intercept)) #no good
+# 
+# gs_lm3 <- update(gs_lm, .~. + s +pct_dark_phase) #no good, mn doesn't change
+# summary(gs_lm3)
+# 
+# gs_lm4 <- update(gs_lm, .~. + c) # good, carbon p-value =.02 
+# 
+# glance(gs_lm3)
+# glance(gs_lm4)
+# 
+# summary(gs_lm4)
+# 
+# 
+# # gs_aug <- augment(gs_lm4, complete)
+# 
+# 
+# options(mc.cores = parallel::detectCores())
+# 
+# stan_gs <- stan_glm(CVN_US_FS ~ ags + pdp, data = cvn_bake)
+# stan_gs2 <- stan_glm(CVN_US_FS ~ pdp + c, data = cvn_bake)
+# stan_gs3 <- stan_glm(CVN_US_FS ~ pdp:mli+ pdp + c, data = cvn_bake)
+# stan_gs4 <- stan_glm(CVN_US_FS ~ pdp:mli + pdp +s, data = cvn_bake)
+# stan_gs5 <- stan_glm(CVN_US_FS ~ ags:pdp + pdp + si, data = cvn_bake)
+# 
+# print(stan_gs)
+# print(stan_gs2)
+# print(stan_gs3)
+# print(stan_gs4)
+# print(stan_gs5)
+# summary(stan_gs4)
+# 
+# plot(stan_gs3, plotfun = "areas", prob=0.95, pars = "c")+
+#   labs(title = "Uncertainty for Carbon Coefficient")
+# 
+# bayesplot::mcmc_areas_ridges(stan_gs4)+labs(title = "Main Title")
 
 
 ```
 
 
 ```{r}
-.fitted <- predict(stan_gs4,newdata = cvn_bake)
-
-stan_aug <- bind_cols(cvn_bake, .fitted =.fitted) %>% mutate(model="Stan")
-
-
-stan_aug %>% 
-  bind_rows(rlm_aug) %>% 
-  ggplot(aes(.fitted, CVN_US_FS))+
-  geom_point(aes(col=model))+
-  geom_abline(lty=2, col='grey50')+
-  coord_obs_pred()+
-  labs(title = "Observed CVN vs. Predicted",
-       x="Predicted CVN (ft-lb)",
-       y = "Full-Size US CVN (ft-lb)",
-       caption = "Model: CVN ~ DP + AGS:DP")
+# .fitted <- predict(stan_gs4,newdata = cvn_bake)
+# 
+# stan_aug <- bind_cols(cvn_bake, .fitted =.fitted) %>% mutate(model="Stan")
+# 
+# 
+# stan_aug %>% 
+#   bind_rows(rlm_aug) %>% 
+#   ggplot(aes(.fitted, CVN_US_FS))+
+#   geom_point(aes(col=model))+
+#   geom_abline(lty=2, col='grey50')+
+#   coord_obs_pred()+
+#   labs(title = "Observed CVN vs. Predicted",
+#        x="Predicted CVN (ft-lb)",
+#        y = "Full-Size US CVN (ft-lb)",
+#        caption = "Model: CVN ~ DP + AGS:DP")
 ```
 
 
 ```{r interaction plot}
-complete %>% 
-  pivot_longer(-CVN_US_FS) %>% 
-  ggplot(aes(value, CVN_US_FS))+
-  geom_point(aes(col=name), show.legend = F)+
-  facet_wrap( ~ name, scales = "free_x")+
-  geom_smooth(method = "lm", se=F)
+# complete %>% 
+#   pivot_longer(-CVN_US_FS) %>% 
+#   ggplot(aes(value, CVN_US_FS))+
+#   geom_point(aes(col=name), show.legend = F)+
+#   facet_wrap( ~ name, scales = "free_x")+
+#   geom_smooth(method = "lm", se=F)
 
 ```
 
 
 ```{r plot_grain_size}
-gs_aug %>% 
-   ggplot(aes(.fitted,CVN_US_FS))+
-  geom_point(col='orangered')+
-  geom_abline(lty=2, col='grey50')+
-  coord_obs_pred()+
-  annotate("text", x= 75, y = 250,label=expression(R^2 ~ "= 0.57"), size=5)+
-  labs(title = "Observed CVN vs. Predicted",
-       caption = "Model: CVN ~ ASTM_GS + C",
-       x="Predicted")
+# gs_aug %>% 
+#    ggplot(aes(.fitted,CVN_US_FS))+
+#   geom_point(col='orangered')+
+#   geom_abline(lty=2, col='grey50')+
+#   coord_obs_pred()+
+#   annotate("text", x= 75, y = 250,label=expression(R^2 ~ "= 0.57"), size=5)+
+#   labs(title = "Observed CVN vs. Predicted",
+#        caption = "Model: CVN ~ ASTM_GS + C",
+#        x="Predicted")
 
 ```
 
