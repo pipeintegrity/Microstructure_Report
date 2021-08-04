@@ -18,6 +18,7 @@ knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE)
 ```{r libraries and data}
 
 # load libraries ----------------------------------------------------------
+library("gridExtra")                        # Load gridExtra package
 library(janitor)
 library(patchwork)
 library(tidyverse)
@@ -1063,18 +1064,122 @@ comp <-
              sheet = "Composition") %>%
    janitor::clean_names() %>%
   filter(skip==FALSE) %>%
-  select(group, feature, c:p) %>%
+     mutate(across(.cols = c:ca, ~ ifelse(str_detect(string = .x, pattern = "<"),
+        as.numeric(str_remove(string =.x, pattern =  "<"))/ 4,
+    as.numeric(.x)))) %>% 
+  filter(
+   ni < .5 | is.na(ni),
+    cu < 1 | is.na(cu),
+    ti < 1 | is.na(ti),
+    cr < .3 | is.na(cr),
+    al < 1 | is.na(al),
+    c < 0.4 | c > 0.03 | is.na(c),
+    si < 0.35 | is.na(si),
+    mn < 3| is.na(mn),
+    mo < 0.1 | is.na(mo)
+  ) %>%
+  mutate(
+    c = ifelse(c > 0.4 | c < .03, NA, c),
+    mn = ifelse(mn > 2 | mn < .2, NA, mn),
+    p = ifelse(p > 0.16 | p < 0.001, NA, p),
+    s = ifelse(s > 0.08 | s < 0.001, NA, s),
+    si = ifelse(si > 0.5 | si < 0.005, NA, si),
+    nb = ifelse(nb > 0.15 | nb < 0.0001, NA, nb),
+    v = ifelse(v > 0.15 | v < 0.0001, NA, v),
+    ti = ifelse(ti > 0.15 | ti < 0.0001, NA, ti),
+    ni = ifelse(ni > 0.3 | ni < 0.0001, NA, ni),
+    cu = ifelse(cu > 0.5 | cu < 0.0001, NA, cu),
+    mo = ifelse(mo > 0.15 | mo < 0.0001, NA, mo),
+    cr = ifelse(cr > 0.3 | cr < 0.0001, NA, cr),
+    b = ifelse(b > 0.001 | b < 0.00001, NA, b),
+    ca = ifelse(ca > 0.01 | ca < 0.00001, NA, ca)
+  )  %>% 
   group_by(group, feature) %>%
-  mutate(across(.cols = c:p, as.numeric)) %>%
-  summarise(across(.cols = c:p, ~mean(.x, na.rm=T)))
+  summarise(across(
+    .cols = c:ca,
+    .fns = mean,
+    na.rm = T
+  )) %>%
+  select(group,
+         feature,
+         al,
+        c,
+        cr,
+        cu,
+        mn,
+        mo,
+        nb,
+        ni,
+        p,
+        s,
+        si,
+        v)
 
 # Feature data -----------------------------------------------------------
 
 feature <-
   read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
              sheet = "Features") %>%
-  janitor::clean_names() %>% 
-  rename(feature = feature_id)
+  janitor::clean_names() %>%
+  select(
+    group,
+    feature_id,
+    feature_type,
+    grade,
+    od_inch,
+    seam_type,
+    recorded_nominal_wt_inch,
+    pg_e_install_year,
+    mfr_year
+  ) %>%
+  rename(
+    OD = od_inch,
+    wall = recorded_nominal_wt_inch,
+    feature = feature_id,
+    year = pg_e_install_year
+  ) %>%
+  mutate(
+    mfr_year = (str_sub(mfr_year, 1, end = 4)),
+    mfr_year = ifelse(mfr_year == "earl", 1952, mfr_year),
+    group = ifelse(group == "ARB Houston", "ATS-ARBH", group),
+    year = case_when(
+      str_detect(string = year, pattern = "/") ~ str_sub(year,-4),
+      group == "Modesto Yard" & feature == "Feature 6" ~ "NA",
+      group == "Modesto Yard" & feature == "Feature 8" ~ "NA",
+      group == "Modesto Yard" & feature == "Feature 15" ~ "NA",
+      group == "Modesto Yard" & feature == "Feature 16" ~ "NA",
+      group == "Modesto Yard" & feature == "Feature 17" ~ "NA",
+      group == "Modesto Yard" & feature == "Feature 18" ~ "NA",
+      group == "Modesto Yard" & feature == "Feature 19" ~ "NA",
+      is.na(year) ~ mfr_year,
+      TRUE ~ year
+    ),
+    year = as.numeric(year),
+    OD = as.numeric(OD),
+    wall = as.numeric(wall),
+    grade = case_when(
+      str_detect(grade, "35000") ~ "Grade B",
+      str_detect(grade, "B") ~ "Grade B",
+      str_detect(grade, "X42") ~ "X42",
+      str_detect(grade, "A-53") ~ "Grade B",
+      grade == "30000" ~ "Early",
+      grade == "40000" ~ "X42",
+      grade == "X-60" ~ "X60",
+      grade == "X-48" ~ "X46",
+      str_detect(grade, "48") ~ "X46",
+      str_detect(grade, "65") ~ "X65",
+      grade == "GR B" ~ "Grade B",
+      grade == "Unknown" ~ "NA",
+      grade == "N/A" ~ "NA",
+      grade == "B/Unknown" ~ "Grade B",
+      TRUE ~ grade
+    ),
+    grade = str_remove(grade, "API 5L "),
+    grade = str_remove(grade, "-"),
+    grade = ifelse(grade == "NA", NA, grade),
+    source = "ECA2"
+  ) %>%
+  filter(feature_type == "Pipe")
 
 # IIT data ----------------------------------------------------------------
 
@@ -1142,23 +1247,25 @@ ECA_CVN <- read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
   filter(str_detect(location, "Base")) %>% #removing weld tests
   mutate(
     SA_SS = ifelse(shear_area_percent==100, 0.99,shear_area_percent/ 100),
-    t_ss_in = charpy_size_mm / 25.4,
+    #calc subsize shear area with 0.99 to avoid singularities and rename
+    t_ss_mm = charpy_size_mm,
+    #rename subsize charpy thickness in mm
+    t_ss_in = t_ss_mm / 25.4,
     #calc subsize charpy thickness in inches
-    sigB = (-12.736) * (t_ss_in / .394) ^ 2 +
-      39.984 * (t_ss_in / 0.394) + 4.6897,
-    #calc sigmoidal parameter B
-    sigA = (-21.812) * (t_ss_in / 0.394) ^ 2 + 68.279 * (t_ss_in / 0.394) +
-      8.4349,
-    #calc sigmoidal parameter A
-    TT_SS_F =  (temperature_f - sigB * log(SA_SS /
-                                          (1 - SA_SS)) + sigA) * 0.95 ,
-    TT_FS_F = TT_SS_F + 66 * (wt_in ^ 0.55) *
-      (t_ss_in ^ (-.7) - 0.394 ^ (-.7)),
-    
+    sigA = (-29.3943) * (t_ss_mm / 10) ^ 2 + 72.9619 * (t_ss_mm / 10) +
+      6.2530,
+    #calc sigmoidal parameter A per API 579 table on page 9F-3
+    sigB = (76.0070) * (t_ss_mm / 10) ^ 3 + 
+      (-183.4809) * (t_ss_mm / 10) ^ 2 +
+      148.2843 * (t_ss_mm / 10) - 7.8121,
+    #calc sigmoidal parameter B per API 579 table on page 9F-3
+    TT_SS_F =  temperature_f - sigB * log(SA_SS / (1 - SA_SS)) + sigA,
+    #calc subsize transition temp
+    #previously a 0.99 was added at the end to correct
+    TT_FS_F = TT_SS_F + 66 * (wt_in ^ 0.55) * (t_ss_in ^ (-.7) - 0.394 ^ (-.7)),
+    #calc fullsize (0.394 in size) transition temp using the nominal wall thickness
     CVN_SS = absorbed_energy_ft_lbs,
     #rename subsize CVN
-    
-    #calc subsize shear area and rename
     CVN_US_SS = CVN_SS / (0.9 * SA_SS + 0.1),
     #calc subsize CVN upper shelf energy from subsize CVN and subsize shear area
     CVN_US_FS = CVN_US_SS * 0.394 / t_ss_in
@@ -1174,17 +1281,18 @@ ECA_CVN <- read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
 micro <- MICRO %>%
   rename(group = Group,
          feature = Feature,
-         polygonal =`Polygonal ferrite grains that are relatively distinct and free of dots, lines or cloudy features.`) %>% 
-  janitor::clean_names() %>% 
-  group_by(group, feature) %>% 
-  select(astm_grain_size, mean_linear_intercept,pct_dark_phase) %>% 
-  summarise(astm_grain_size=mean(astm_grain_size, na.rm=T),
-         mean_linear_intercept = mean(mean_linear_intercept, na.rm=T),
-         pct_dark_phase = mean(pct_dark_phase, na.rm=T)
-         ) %>% 
+         polygonal = `Polygonal ferrite grains that are relatively distinct and free of dots, lines or cloudy features.`) %>%
+  janitor::clean_names() %>%
+  group_by(group, feature) %>%
+  select(astm_grain_size, mean_linear_intercept, pct_dark_phase) %>%
+  summarise(
+    astm_grain_size = mean(astm_grain_size, na.rm = T),
+    mean_linear_intercept = mean(mean_linear_intercept, na.rm = T),
+    pct_dark_phase = mean(pct_dark_phase, na.rm = T)
+  ) %>%
   ungroup()
 
-## Coombine the data -----------------------------------------------------
+## Join the data -----------------------------------------------------
 ndt_ten_comp <- ndt %>%
   full_join(feature,
             by = c("group", "feature")) %>%
@@ -1196,8 +1304,98 @@ ndt_ten_comp <- ndt %>%
             by = c("group", "feature")) %>% 
   full_join(micro, 
             by = c("group", "feature")) %>% 
-  ungroup()
+  ungroup() %>% 
+  distinct()
+
+ndt_ten_comp_GS <- as.data.frame(ndt_ten_comp[complete.cases(ndt_ten_comp[ , "astm_grain_size"]),])
+
+
 ```
+
+
+
+```{r histo OD, fig.width=7.5}
+library(ggplot2)
+ggplot(ndt_ten_comp_GS, aes(x=OD)) +
+  geom_histogram(color="black", binwidth = 2 , fill="steelblue")
+
+```
+
+```{r histo wall, fig.width=7.5}
+library(ggplot2)
+ggplot(ndt_ten_comp_GS, aes(x=wall)) +
+  geom_histogram(color="black", binwidth = .02 , fill="steelblue")
+
+```
+
+```{r histo year, fig.width=7.5}
+library(ggplot2)
+ggplot(ndt_ten_comp_GS, aes(x=year)) +
+  geom_histogram(color="black", binwidth = 5 , fill="steelblue")
+
+```
+
+```{r histo c, fig.width=7.5}
+library(ggplot2)
+ggplot(ndt_ten_comp_GS, aes(x=c)) +
+  geom_histogram(color="black", binwidth = .01 , fill="steelblue")
+
+```
+
+```{r histo mn, fig.width=7.5}
+library(ggplot2)
+ggplot(ndt_ten_comp_GS, aes(x=mn)) +
+  geom_histogram(color="black", binwidth = .1 , fill="steelblue")
+
+```
+
+```{r histo si, fig.width=7.5}
+library(ggplot2)
+ggplot(ndt_ten_comp_GS, aes(x=si)) +
+  geom_histogram(color="black", binwidth = .02 , fill="steelblue")
+
+```
+
+```{r CVN micro, fig.height = 3.5, fig.width = 7}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(year, astm_grain_size)) +
+  geom_point(color="steelblue")
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(year, mean_linear_intercept)) +
+  geom_point(color="steelblue")
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(year, pct_dark_phase)) +
+  geom_point(color="steelblue")
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,ncol = 3)
+
+```
+```
+## GS, DP, and Carbon Content  
+## GS, DP, and Manganese Content  
+
+```{r}
+
+```
+
+
+## GS, DP, and Vintage
+## GS, DP, and Grade
+## GS, DP, and Yield Strength
+## GS, DP, and Ultimate Tensile Strength
+## GS, DP, and Strain Hardening Exponent
+## GS, DP, and IIT Predicted Yield Strength
+## GS, DP, and IIT Predicted Ultimate Tensile Strength
+## GS, DP, and IIT Predicted Strain Hardening Exponent
+## GS, DP, and Charpy V Notch Upper Shelf Energy
+## GS, DP, and Charpy V Notch Transition Temperature
+
+
 
 ## MLI plots  
 ```{r mli plots}
