@@ -320,7 +320,7 @@ IND <- read_excel("C:\\Users\\Joel\\OneDrive - RSI Pipeline Solutions\\PGE\\char
 # load ECA  
 
 ```{r ECA_DATA}
-ECA_DATA <- read_excel("C:\\Users\\Joel\\OneDrive - RSI Pipeline Solutions\\PGE\\charpy\\ECA_PLUS_PRCI.xlsx",
+ECA_DATA <- read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
                        sheet = "Features")  %>%
   clean_names() %>%
   rename(feature = feature_id) %>%
@@ -339,7 +339,7 @@ ECA_DATA <- read_excel("C:\\Users\\Joel\\OneDrive - RSI Pipeline Solutions\\PGE\
 
 
 ```{r ECA_CHEM}
-ECA_CHEM <- read_excel("C:\\Users\\Joel\\OneDrive - RSI Pipeline Solutions\\PGE\\charpy\\ECA_PLUS_PRCI.xlsx",
+ECA_CHEM <- read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
                         sheet = "Composition")  %>%
   clean_names() %>%
    filter(str_detect(tool, "Lab")) %>%
@@ -397,7 +397,7 @@ ECA_CHEM <- read_excel("C:\\Users\\Joel\\OneDrive - RSI Pipeline Solutions\\PGE\
 
 
 ```{r ECA_CVN_WT}
-ECA_WT <- read_excel("C:\\Users\\Joel\\OneDrive - RSI Pipeline Solutions\\PGE\\charpy\\ECA_PLUS_PRCI.xlsx",
+ECA_WT <- read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
                      sheet = "Wall Thickness")  %>%
   clean_names() %>%
   filter(str_detect(location_type, "AFG", negate = T)) %>%  #remove any wall thickness measurements after grind
@@ -407,7 +407,7 @@ ECA_WT <- read_excel("C:\\Users\\Joel\\OneDrive - RSI Pipeline Solutions\\PGE\\c
          feature,
          wt_in)
 
-ECA_CVN <- read_excel("C:\\Users\\Joel\\OneDrive - RSI Pipeline Solutions\\PGE\\charpy\\ECA_PLUS_PRCI.xlsx",
+ECA_CVN <- read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
                          sheet = "Charpy")  %>%
   clean_names() %>% 
   full_join(ECA_WT, by= c("group", "feature")) %>% 
@@ -505,7 +505,7 @@ ggplot(ECA_JOIN, aes(x=CVN_US_FS)) +
 ggplot(TIM_JOIN, aes(x=TT_FS_F)) +
   geom_histogram(color="black", binwidth = 20 , fill="steelblue")+
   scale_x_continuous(limits = c(-50,250))+
-  labs(x = "Transition Temp. (°F)")
+  labs(x = "Transition Temp. (?F)")
 ```
 
 ## TT ECA  
@@ -514,7 +514,7 @@ ggplot(TIM_JOIN, aes(x=TT_FS_F)) +
 ggplot(ECA_JOIN, aes(x=TT_FS_F)) +
   geom_histogram(color="black", binwidth = 20 , fill="steelblue")+
   scale_x_continuous(limits = c(-50,250))+
-  labs(x = "Transition Temp. (°F)")
+  labs(x = "Transition Temp. (?F)")
 
 ```
 
@@ -613,7 +613,7 @@ TIM_JOIN %>%
   ) +
   theme_bw(16, "serif")+
   labs(title = "Element Effects on Transition Temperature (Vendor 1)", 
-       y = "Transition Temperature (°F)", 
+       y = "Transition Temperature (?F)", 
        x = "Element Content (wt%)")+
   theme(axis.text.x = element_text(size=11), 
         panel.spacing.x = unit(1.5,"lines"))
@@ -1091,7 +1091,7 @@ ggplot(tt_predictions_rf_a,
               se = F #,
               #col = 'orange'
               )+
-  labs(title = "Transition Temperature (°F)", 
+  labs(title = "Transition Temperature (?F)", 
        subtitle = "rf_a = S/Si/C/Mo/Mn/Cr/Nb/P/Cu/Ni/V",
        x="Predicted",
        y="Observed",
@@ -1133,7 +1133,7 @@ ggplot(tt_predictions_rf_bind,
   geom_abline(col='grey50',
               lty=3, 
               lwd=1.1)+
-  labs(title = "Transition Temperature (°F)", 
+  labs(title = "Transition Temperature (?F)", 
        subtitle = "rf_a = all elements; rf_b = Mn/C/S/Si",
        x="Predicted",
        y="Observed",
@@ -1261,8 +1261,8 @@ ECA <-
 ```
 
 ```{r micro}
-ECA_MICRO <- read_excel("Microstructure_Data_Collection_Online_2021_01_13.xlsx",
-                         sheet = "Collection")  %>%
+ECA_MICRO <- read_excel("Microstructure_Data_Collection_Online_2021_01_05_S5CJ.xlsx",
+                    sheet = "Collection2")  %>%
   clean_names() %>%
   filter(sample_type == "Cross_section" | sample_type == "Cross-section",
           str_detect(skip, "NoSkip")) %>%
