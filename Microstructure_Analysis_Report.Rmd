@@ -204,23 +204,16 @@ MICRO %>%
   DT::datatable()
 ```
 
-## MLI GS for cross-sections
+## MLI GS for cross-sections and replicas
 
 This plot enables visualization of the data distribution. Interestingly, for grain sizes less than \~5 μm it appears that evaluators chose to rely the comparison method and avoid the counting methods.
 
-```{r GS9, fig.height=12, fig.width=6.5, fig.align='center', fig.cap = "ASTM GS evaluated for destructive cross-sections by the counting method."}
+```{r GS9, fig.height=12, fig.width=10, fig.align='center', fig.cap = "ASTM GS evaluated for destructive cross-sections and replicas by counting and comparison methods."}
 
-MICRO %>%
-  # mutate(number = as.numeric(str_remove(Feature,"Feature "))) %>%
-  # reorder(nnumber) %>%
-  # arrange(number) %>%
+plot_dest <- MICRO %>%
   filter(Skip == "NoSkip",
          Sample_Type == "Cross_section",
          Analysis_Type == "Grain_Size") %>%
-  # select(name,
-  #        # number,
-  #        Mean_Linear_Intercept) %>%
-  # na.omit() %>%
   ggplot() +
   geom_boxplot(aes(x = name, 
                    y = Mean_Linear_Intercept, 
@@ -228,42 +221,43 @@ MICRO %>%
                alpha = 0.75) +
   coord_flip() +
   scale_y_continuous(limits = c(0, 25)) +
-  # scale_x_discrete(limits = name) +
   theme_bw() +
   labs(x = "Pipe or Fitting",
        y = expression("Mean linear intercept GS (" ~ mu ~ "m)")) +
   theme(axis.text.x = element_text(angle = 90),
         legend.position = c(0.8, 0.075))
 
+plot_repl <- MICRO %>%
+  filter(Skip == "NoSkip",
+         Analysis_Type == "Grain_Size",
+         Sample_Type == "Replica") %>%
+  ggplot() +
+  geom_boxplot(aes(x = name,
+                   y = Mean_Linear_Intercept,
+                   fill = Method),
+               alpha = 0.75) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 25)) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = expression("Mean linear intercept GS (" ~ mu ~ "m)")) +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = c(0.8, 0.05))
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot_dest,plot_repl,ncol = 2)
+
 ```
 
-```{r GS10, fig.height=9, fig.width=6.5, fig.align='center', fig.cap= "ASTM GS evaluated for destructive cross-sections by the comparison method."}
 
-# MICRO %>%
-#   filter(Skip == "NoSkip") %>%
-#   filter(Analysis_Type == "Grain_Size") %>% 
-#   filter(Sample_Type == "Cross_section" &
-#            Method == "Comparison") %>%
-#   ggplot() +
-#   geom_boxplot(aes(x = name, y = Mean_Linear_Intercept),
-#                fill = "steelblue2",
-#                alpha = 0.75) +
-#   coord_flip()+
-#   scale_y_continuous(limits = c(0, 25)) +
-#   theme_bw() +
-#   labs(x = "Pipe or Fitting",
-#        y = expression("Mean linear intercept GS (" ~ mu ~ "m)")) +
-#   theme(axis.text.x = element_text(angle = 90))
-
-```
-
-## MLI GS for cross-sections (ascending order)
+## MLI GS for destructive cross-sections and replicas (ascending order)
 
 The purpose of these plots is qualitative identification and comparison of the features with small and large grains between the two analysis methods.
 
-```{r GS11, fig.height=12, fig.width=6.5, fig.align='center', fig.cap= "ASTM GS evaluated for destructive cross-sections by the counting method (ascending sort)."}
+```{r GS11, fig.height=12, fig.width=10, fig.align='center', fig.cap= "ASTM GS evaluated for destructive cross-sections and replicas by the counting and comparison methods (ascending sort)."}
 
-MICRO %>%
+plot_dest <- MICRO %>%
   filter(Skip == "NoSkip",
          Analysis_Type == "Grain_Size",
          Sample_Type == "Cross_section") %>%
@@ -282,88 +276,7 @@ MICRO %>%
   theme(axis.text.x = element_text(angle = 90),
         legend.position = c(0.8, 0.1))
 
-```
-
-```{r GS12, fig.height=9, fig.width=6, fig.align='center', fig.cap= "ASTM GS evaluated for destructive cross-sections by the comparison method (ascending sort)"}
-
-# MICRO %>%
-#   filter(
-#     Skip == "NoSkip",
-#     Analysis_Type == "Grain_Size",
-#     Sample_Type == "Cross_section",
-#     Method == "Comparison"
-#   ) %>%
-#   mutate(name = fct_reorder(name,
-#                             Mean_Linear_Intercept,
-#                             .fun = 'mean')) %>%
-#   ggplot() +
-#   geom_boxplot(aes(x = name,
-#                    y = Mean_Linear_Intercept),
-#                fill = "steelblue2",
-#                alpha = 0.75) +
-#   coord_flip() +
-#   scale_y_continuous(limits = c(0, 25)) +
-#   theme_bw() +
-#   labs(x = "Pipe or Fitting",
-#        y = expression("Mean linear intercept GS (" ~ mu ~ "m)")) +
-#   theme(axis.text.x = element_text(angle = 90))
-
-```
-
-## MLI GS for Replicas
-
-The purpose of these plots is visualization of the data distribution. It is interesting to note that for grain sizes less than \~5 μm it appears that evaluators opted to use the comparison method only and avoid using the counting methods.
-
-```{r GS13, fig.height=12, fig.width=6, fig.align='center', fig.cap="ASTM GS evaluated for microstructural replicas by the counting method."}
-
-MICRO %>%
-  filter(Skip == "NoSkip",
-         Analysis_Type == "Grain_Size",
-         Sample_Type == "Replica") %>%
-  ggplot() +
-  geom_boxplot(aes(x = name,
-                   y = Mean_Linear_Intercept,
-                   fill = Method),
-               alpha = 0.75) +
-  coord_flip() +
-  scale_y_continuous(limits = c(0, 25)) +
-  theme_bw() +
-  labs(x = "Pipe or Fitting",
-       y = expression("Mean linear intercept GS (" ~ mu ~ "m)")) +
-  theme(axis.text.x = element_text(angle = 90),
-        legend.position = c(0.8, 0.05))
-
-```
-
-```{r GS14, fig.height=9, fig.width=6, fig.align='center', fig.cap="ASTM GS evaluated for microstructural replicas by the comparison method."}
-# 
-# MICRO %>%
-#   filter(Skip == "NoSkip") %>%
-#   filter(Analysis_Type == "Grain_Size") %>% 
-#   filter(Sample_Type == "Replica" & Method == "Comparison") %>%
-#   
-#   ggplot() +
-#   geom_boxplot(aes(x = name,
-#                    y = Mean_Linear_Intercept),
-#                fill = "steelblue2",
-#                alpha = 0.75) +
-#   coord_flip()+
-#   scale_y_continuous(limits = c(0, 25)) +
-#   theme_bw() +
-#   labs(x = "Pipe or Fitting",
-#        y = expression("Mean linear intercept GS (" ~ mu ~ "m)")) +
-#   theme(axis.text.x = element_text(angle = 90))
-
-
-```
-
-## MLI GS for Replicas (ascending order)
-
-The purpose of these plots is qualitative identification and comparison of the features with small and large grains between the two analysis methods.
-
-```{r GS15, fig.height=12, fig.width=6.5, fig.align='center', fig.cap="ASTM GS evaluated for microstructural replicas (ascending sort)"}
-
-MICRO %>%
+plot_repl <- MICRO %>%
   filter(Skip == "NoSkip",
          Analysis_Type == "Grain_Size",
          Sample_Type == "Replica") %>%
@@ -384,43 +297,23 @@ MICRO %>%
   theme(axis.text.x = element_text(angle = 90),
         legend.position = c(0.8, 0.1))
 
-```
-
-```{r GS16, fig.height=9, fig.width=6, fig.align='center', fig.cap="ASTM GS evaluated for microstructural replicas by the comparison method (ascending sort)."}
-
-# MICRO %>%
-#   filter(Skip == "NoSkip") %>%
-#   filter(Analysis_Type == "Grain_Size") %>%
-#   filter(Sample_Type == "Replica" & Method == "Comparison") %>%
-#   
-#   mutate(name = fct_reorder(name, Mean_Linear_Intercept, .fun = 'mean')) %>%
-#   ggplot() +
-#   geom_boxplot(
-#     mapping = aes(x = name,
-#                   y = Mean_Linear_Intercept),
-#     fill = "steelblue2",
-#     alpha = 0.75
-#   ) +
-#   coord_flip() +
-#   scale_y_continuous(limits = c(0, 25)) +
-#   theme_bw() +
-#   labs(x = "Pipe or Fitting",
-#        y = expression("Mean linear intercept GS (" ~ mu ~ "m)")) +
-#   theme(axis.text.x = element_text(angle = 90))
-
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot_dest,plot_repl,ncol = 2)
+ 
 ```
 
 # Data for dark phase (DP)
 
 The data identified as erroneous (selected to "skip") through the quality control (QC) process has been eliminated from this section.
 
-## DP for cross-sections
+## DP for cross-sections and replicas by counting and comparison methods
 
 The purpose of these plots is visualization of the data distribution.
 
-```{r DP1, fig.height=12, fig.width=6.5, fig.align='center', fig.cap="DP (%) evaluated for destructive cross-sections"}
+```{r DP1, fig.height=12, fig.width=10, fig.align='center', fig.cap="DP (%) evaluated for destructive cross-sections and replicas by the counting and comparison methods"}
 
-MICRO %>%
+plot_dest <- MICRO %>%
   filter(Skip == "NoSkip",
   Analysis_Type == "Dark_Phase",
   Sample_Type == "Cross_section") %>%
@@ -437,26 +330,28 @@ MICRO %>%
   theme(axis.text.x = element_text(angle = 90), 
         legend.position = c(0.8, 0.1))
 
-```
+plot_repl <- MICRO %>%
+  filter(Skip == "NoSkip",
+         Analysis_Type == "Dark_Phase",
+         Sample_Type == "Replica") %>%
+  
+  ggplot() +
+  geom_boxplot(aes(x = name,
+                   y = Pct_Dark_Phase,
+                   fill = Method),
+               alpha = 0.75) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 60)) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = "Dark Phase (%)") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = c(0.8, 0.1))
 
-```{r DP2, fig.height=9, fig.width=6, fig.align='center', fig.cap="DP (%) evaluated for destructive cross-sections by the comparison method."}
 
-# MICRO %>%
-#   filter(Skip == "NoSkip") %>%
-#   filter(Analysis_Type == "Dark_Phase") %>%
-#   filter(Sample_Type == "Cross_section" &
-#            Method == "Comparison") %>%
-#   ggplot() +
-#   geom_boxplot(aes(x = name,
-#                    y = Pct_Dark_Phase),
-#                fill = "steelblue2",
-#                alpha = 0.75) +
-#   coord_flip()+
-#   scale_y_continuous(limits = c(0, 60)) +
-#   theme_bw() +
-#   labs(x = "Pipe or Fitting",
-#        y = "Dark Phase (%)") +
-#   theme(axis.text.x = element_text(angle = 90))
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot_dest,plot_repl,ncol = 2)
 
 ```
 
@@ -464,10 +359,9 @@ MICRO %>%
 
 The purpose of these plots is qualitative identification and comparison of the features with a small or large amount of dark phase between the two analysis methods.
 
-```{r DP3, fig.height=12, fig.width=6.5, fig.align='center', fig.cap= "DP (%) evaluated for destructive cross-sections (ascending sort)"}
+```{r DP3, fig.height=12, fig.width=10, fig.align='center', fig.cap= "DP (%) evaluated for destructive cross-sections and replicas by the counting and comparison methods (ascending sort)"}
 
-
-MICRO %>%
+plot_dest <- MICRO %>%
   filter(Skip == "NoSkip",
          Analysis_Type == "Dark_Phase",
          Sample_Type == "Cross_section") %>%
@@ -487,88 +381,7 @@ MICRO %>%
   theme(axis.text.x = element_text(angle = 90), 
         legend.position = c(0.8, 0.1))
 
-```
-
-```{r DP4, fig.height=9, fig.width=6, fig.align='center', fig.cap= "DP (%) evaluated for destructive cross-sections by the comparison method (ascending sort)."}
-# 
-# MICRO %>%
-#   filter(Skip == "NoSkip") %>%
-#   filter(Analysis_Type == "Dark_Phase") %>%
-#   filter(Sample_Type == "Cross_section",
-#          Method == "Comparison") %>%
-#   
-#   mutate(name = fct_reorder(name,
-#                                Pct_Dark_Phase,
-#                                .fun = 'mean')) %>%
-#   ggplot() +
-#   geom_boxplot(aes(x = name,
-#                    y = Pct_Dark_Phase),
-#                fill = "steelblue2",
-#                alpha = 0.75) +
-#   coord_flip()+
-#   scale_y_continuous(limits = c(0, 60)) +
-#   theme_bw() +
-#   labs(x = "Pipe or Fitting",
-#        y = "Dark phase (%)") +
-#   theme(axis.text.x = element_text(angle = 90))
-
-```
-
-## DP for Replicas
-
-The purpose of these plots is visualization of the data distribution.
-
-```{r DP5, fig.height=12, fig.width=6.5, fig.align='center', fig.cap="DP (%) evaluated for replicas"}
-
-MICRO %>%
-  filter(Skip == "NoSkip",
-         Analysis_Type == "Dark_Phase",
-         Sample_Type == "Replica") %>%
-  
-  ggplot() +
-  geom_boxplot(aes(x = name,
-                   y = Pct_Dark_Phase,
-                   fill = Method),
-               alpha = 0.75) +
-  coord_flip() +
-  scale_y_continuous(limits = c(0, 60)) +
-  theme_bw() +
-  labs(x = "Pipe or Fitting",
-       y = "Dark Phase (%)") +
-  theme(axis.text.x = element_text(angle = 90), 
-        legend.position = c(0.8, 0.1))
-
-```
-
-```{r DP6, fig.height=9, fig.width=6, fig.align='center', fig.cap="DP (%) evaluated for replicas by the comparison method."}
-
-# MICRO %>%
-#   filter(Skip == "NoSkip") %>%
-#   filter(Analysis_Type == "Dark_Phase") %>%
-#   filter(Sample_Type == "Replica",
-#          Method == "Comparison") %>%
-#   
-#   ggplot() +
-#   geom_boxplot(aes(x = name,
-#                    y = Pct_Dark_Phase),
-#                fill = "steelblue2",
-#                alpha = 0.75) +
-#   coord_flip()+
-#   scale_y_continuous(limits = c(0, 60)) +
-#   theme_bw() +
-#   labs(x = "Pipe or Fitting",
-#        y = "Dark Phase (%)") +
-#   theme(axis.text.x = element_text(angle = 90))
-
-```
-
-## DP for replicas (ascending order)
-
-The purpose of these plots is qualitative identification and comparison of the features with a small or large amount of dark phase between the two analysis methods.
-
-```{r DP7, fig.height=12, fig.width=6.5, fig.align='center', fig.cap= "DP (%) evaluated for replicas (ascending sort)"}
-
-MICRO %>%
+plot_repl <- MICRO %>%
   filter(Skip == "NoSkip",
          Analysis_Type == "Dark_Phase",
          Sample_Type == "Replica") %>%
@@ -590,33 +403,12 @@ MICRO %>%
   theme(axis.text.x = element_text(angle = 90), 
         legend.position = c(0.8, 0.1))
 
+grid.arrange(          
+  # Apply grid.arrange function
+  plot_dest,plot_repl,ncol = 2)
+
 ```
 
-```{r DP8, fig.height=9, fig.width=6, fig.align='center', fig.cap= "DP (%) evaluated for replicas by the comparison method (ascending sort)."}
-
-# MICRO %>%
-#   filter(Skip == "NoSkip") %>%
-#   filter(Analysis_Type == "Dark_Phase") %>%
-#   filter(Sample_Type == "Replica",
-#          Method == "Comparison") %>%
-#   mutate(name = fct_reorder(name,
-#                                Pct_Dark_Phase,
-#                                .fun = 'mean')) %>%
-#   ggplot() +
-#   geom_boxplot(aes(x = name,
-#                    y = Pct_Dark_Phase),
-#                fill = "steelblue2",
-#                alpha = 0.75) +
-#   coord_flip()+
-#   scale_y_continuous(limits = c(0, 60)) +
-#   theme_bw() +
-#   labs(title = "",
-#        x = "Pipe or Fitting",
-#        y = "Dark phase (%)") +
-#   theme(axis.text.x = element_text(angle = 90))
-
-     
-```
 
 # Method validation: comparison vs counting
 
@@ -1210,7 +1002,6 @@ ndt <-
 
 # Tensile data ------------------------------------------------------------
 
-
 tensile <-
 read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
              sheet = "Tensile") %>%
@@ -1220,10 +1011,13 @@ read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
          type != "GirthWeldStrip" ,
          group != "Calibration Blocks") %>%
   rename(ys5 = x0_5_percent_eul_ys_ksi,
-         uts = uts_ksi) %>%
+         uts = uts_ksi,
+         ten_n = n
+         ) %>%
   group_by(group, feature) %>%
   summarise(ten_ys = mean(ys5, na.rm = T),
-            ten_uts = mean(uts, na.rm = T))
+            ten_uts = mean(uts, na.rm = T),
+            ten_n = mean(ten_n, na.rm = T))
 
 # Wall Thickness -----------------------------------------------------
 
@@ -1305,13 +1099,13 @@ ndt_ten_comp <- ndt %>%
   full_join(micro, 
             by = c("group", "feature")) %>% 
   ungroup() %>% 
-  distinct()
+  distinct() %>% 
+  mutate(dt = OD/wall)
 
 ndt_ten_comp_GS <- as.data.frame(ndt_ten_comp[complete.cases(ndt_ten_comp[ , "astm_grain_size"]),])
 
 
 ```
-
 
 
 ```{r histo OD, fig.width=7.5}
@@ -1328,35 +1122,11 @@ ggplot(ndt_ten_comp_GS, aes(x=wall)) +
 
 ```
 
-```{r histo year, fig.width=7.5}
-library(ggplot2)
-ggplot(ndt_ten_comp_GS, aes(x=year)) +
-  geom_histogram(color="black", binwidth = 5 , fill="steelblue")
 
-```
+## GS, DP, and Grade
 
-```{r histo c, fig.width=7.5}
-library(ggplot2)
-ggplot(ndt_ten_comp_GS, aes(x=c)) +
-  geom_histogram(color="black", binwidth = .01 , fill="steelblue")
-
-```
-
-```{r histo mn, fig.width=7.5}
-library(ggplot2)
-ggplot(ndt_ten_comp_GS, aes(x=mn)) +
-  geom_histogram(color="black", binwidth = .1 , fill="steelblue")
-
-```
-
-```{r histo si, fig.width=7.5}
-library(ggplot2)
-ggplot(ndt_ten_comp_GS, aes(x=si)) +
-  geom_histogram(color="black", binwidth = .02 , fill="steelblue")
-
-```
-
-```{r CVN micro, fig.height = 3.5, fig.width = 7}
+## GS, DP, and Vintage  
+```{r GS, DP, and Vintage, fig.height = 3, fig.width = 10}
 
 plot1 <- ndt_ten_comp_GS %>% 
   ggplot(aes(year, astm_grain_size)) +
@@ -1375,26 +1145,238 @@ plot3 <- ndt_ten_comp_GS %>%
   plot1,plot2,plot3,ncol = 3)
 
 ```
+
+## GS, DP, and Outside Diameter to Wall Thickness Ratio  
+```{r GS, DP, and dt, fig.height = 3, fig.width = 10}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, dt)) +
+  geom_point(color="steelblue")
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, dt)) +
+  geom_point(color="steelblue")
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, dt)) +
+  geom_point(color="steelblue")
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,ncol = 3)
 ```
+
 ## GS, DP, and Carbon Content  
-## GS, DP, and Manganese Content  
+```{r GS, DP, and Carbon Content, fig.height = 3, fig.width = 10}
 
-```{r}
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, c)) +
+  geom_point(color="steelblue")
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, c)) +
+  geom_point(color="steelblue")
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, c)) +
+  geom_point(color="steelblue")
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,ncol = 3)
 
 ```
 
+## GS, DP, and Manganese Content  
+```{r GS, DP, and Manganese Content, fig.height = 3, fig.width = 10}
 
-## GS, DP, and Vintage
-## GS, DP, and Grade
-## GS, DP, and Yield Strength
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, mn)) +
+  geom_point(color="steelblue")
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, mn)) +
+  geom_point(color="steelblue")
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, mn)) +
+  geom_point(color="steelblue")
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,ncol = 3)
+
+```
+
+## GS, DP, and Silicon Content  
+```{r GS, DP, and Silicon Content, fig.height = 3, fig.width = 10}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, si)) +
+  geom_point(color="steelblue")
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, si)) +
+  geom_point(color="steelblue")
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, si)) +
+  geom_point(color="steelblue")
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,ncol = 3)
+
+```
+
+## GS, DP, and Yield Strength  
+```{r GS, DP, and Yield Strength, fig.height = 3, fig.width = 10}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, ten_ys)) +
+  geom_point(color="steelblue")
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, ten_ys)) +
+  geom_point(color="steelblue")
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, ten_ys)) +
+  geom_point(color="steelblue")
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,ncol = 3)
+
+```
+
 ## GS, DP, and Ultimate Tensile Strength
-## GS, DP, and Strain Hardening Exponent
-## GS, DP, and IIT Predicted Yield Strength
-## GS, DP, and IIT Predicted Ultimate Tensile Strength
-## GS, DP, and IIT Predicted Strain Hardening Exponent
-## GS, DP, and Charpy V Notch Upper Shelf Energy
-## GS, DP, and Charpy V Notch Transition Temperature
+```{r GS, DP, and Ultimate Tensile Strength, fig.height = 3, fig.width = 10}
 
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, ten_uts)) +
+  geom_point(color="steelblue")
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, ten_uts)) +
+  geom_point(color="steelblue")
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, ten_uts)) +
+  geom_point(color="steelblue")
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,ncol = 3)
+
+```
+
+## GS, DP, and Strain Hardening Exponent
+```{r GS, DP, and Strain Hardening Exponent, fig.height = 3, fig.width = 10}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, ten_n)) +
+  geom_point(color="steelblue")
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, ten_n)) +
+  geom_point(color="steelblue")
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, ten_n)) +
+  geom_point(color="steelblue")
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,ncol = 3)
+
+```
+
+## GS, DP, and IIT Predicted Yield Strength  
+```{r GS, DP, and IIT Predicted Yield Strength, fig.height = 3, fig.width = 10}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, iitys_5)) +
+  geom_point(color="steelblue")
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, iitys_5)) +
+  geom_point(color="steelblue")
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, iitys_5)) +
+  geom_point(color="steelblue")
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,ncol = 3)
+```
+
+
+
+## GS, DP, and IIT Predicted Ultimate Tensile Strength  
+```{r GS, DP, and IIT Predicted Ultimate Tensile Strength, fig.height = 3, fig.width = 10}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, iituts)) +
+  geom_point(color="steelblue")
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, iituts)) +
+  geom_point(color="steelblue")
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, iituts)) +
+  geom_point(color="steelblue")
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,ncol = 3)
+```
+
+
+
+
+## GS, DP, and Charpy V Notch Upper Shelf Energy
+```{r GS, DP, and Charpy V Notch Upper Shelf Energy, fig.height = 3, fig.width = 10}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, CVN_US_FS)) +
+  geom_point(color="steelblue")
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, CVN_US_FS)) +
+  geom_point(color="steelblue")
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, CVN_US_FS)) +
+  geom_point(color="steelblue")
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,ncol = 3)
+```
+
+
+## GS, DP, and Charpy V Notch Transition Temperature
+```{r GS, DP, and Charpy V Notch Transition Temperature, fig.height = 3, fig.width = 10}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, TT_FS_F)) +
+  geom_point(color="steelblue")
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, TT_FS_F)) +
+  geom_point(color="steelblue")
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, TT_FS_F)) +
+  geom_point(color="steelblue")
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,ncol = 3)
+```
 
 
 ## MLI plots  
