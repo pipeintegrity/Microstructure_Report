@@ -33,7 +33,7 @@ theme_set(theme_bw(16)) #set theme to save typing
 MICRO <- read_excel("Microstructure_Data_Collection_Online_2021_01_05_S5CJ.xlsx",
                     sheet = "Collection2") %>% 
 mutate(Sample_Type = str_replace(Sample_Type, "-", "_"),
-       name = paste0(Group," ",Feature),
+       Group_Feature = paste0(Group," ",Feature),
        year = year(Evaluation_Date),
        Path = str_remove(string = Path,pattern = ".jpg"),
        Path = str_remove(string = Path, pattern = ".tif")) 
@@ -70,7 +70,7 @@ The purpose of this table is to review the data for the features that have alrea
 MICROTABLE_MLI <-  MICRO %>%
   filter(Skip == "NoSkip") %>% 
   filter(Analysis_Type == "Grain_Size") %>%
-  group_by(name, Sample_Type) %>%
+  group_by(Group_Feature, Sample_Type) %>%
   summarize(
     MLI_Count = n(),
     MLI_Median = round(median(Mean_Linear_Intercept, na.rm = T), 1),
@@ -98,7 +98,7 @@ MICRO %>%
 MICROTABLE_DP <-  MICRO %>% 
   filter(Skip == "NoSkip") %>% 
   filter(Analysis_Type == "Dark_Phase") %>% 
-  group_by(name,Sample_Type) %>% 
+  group_by(Group_Feature,Sample_Type) %>% 
             summarize(
             DP_Count = n(),
             DP_Median = round(median(Pct_Dark_Phase,na.rm=T),1),
@@ -111,7 +111,7 @@ MICROTABLE_DP <-  MICRO %>%
 
 ```{r}
 MICROTABLE <- left_join(MICROTABLE_MLI,MICROTABLE_DP,
-          by = c("name", "Sample_Type"))
+          by = c("Group_Feature", "Sample_Type"))
 
 DT::datatable(MICROTABLE,filter="top",
               caption = "Percent dark phase summary table")
@@ -215,7 +215,7 @@ plot_dest <- MICRO %>%
          Sample_Type == "Cross_section",
          Analysis_Type == "Grain_Size") %>%
   ggplot() +
-  geom_boxplot(aes(x = name, 
+  geom_boxplot(aes(x = Group_Feature, 
                    y = Mean_Linear_Intercept, 
                    fill = Method),
                alpha = 0.75) +
@@ -232,7 +232,7 @@ plot_repl <- MICRO %>%
          Analysis_Type == "Grain_Size",
          Sample_Type == "Replica") %>%
   ggplot() +
-  geom_boxplot(aes(x = name,
+  geom_boxplot(aes(x = Group_Feature,
                    y = Mean_Linear_Intercept,
                    fill = Method),
                alpha = 0.75) +
@@ -261,11 +261,11 @@ plot_dest <- MICRO %>%
   filter(Skip == "NoSkip",
          Analysis_Type == "Grain_Size",
          Sample_Type == "Cross_section") %>%
-  mutate(name = fct_reorder(name,
+  mutate(Group_Feature = fct_reorder(Group_Feature,
                             Mean_Linear_Intercept,
                             .fun = 'mean')) %>%
   ggplot() +
-  geom_boxplot(aes(x = name,
+  geom_boxplot(aes(x = Group_Feature,
                    y = Mean_Linear_Intercept, fill = Method),
                alpha = 0.75) +
   coord_flip() +
@@ -281,10 +281,10 @@ plot_repl <- MICRO %>%
          Analysis_Type == "Grain_Size",
          Sample_Type == "Replica") %>%
   
-  mutate(name = fct_reorder(name, Mean_Linear_Intercept, .fun = 'mean')) %>%
+  mutate(Group_Feature = fct_reorder(Group_Feature, Mean_Linear_Intercept, .fun = 'mean')) %>%
   ggplot() +
   geom_boxplot(
-    aes(x = name,
+    aes(x = Group_Feature,
         y = Mean_Linear_Intercept,
         fill = Method),
     alpha = 0.75
@@ -318,7 +318,7 @@ plot_dest <- MICRO %>%
   Analysis_Type == "Dark_Phase",
   Sample_Type == "Cross_section") %>%
   ggplot() +
-  geom_boxplot(aes(x = name,
+  geom_boxplot(aes(x = Group_Feature,
                    y = Pct_Dark_Phase,
                    fill=Method),
                alpha = 0.75) +
@@ -336,7 +336,7 @@ plot_repl <- MICRO %>%
          Sample_Type == "Replica") %>%
   
   ggplot() +
-  geom_boxplot(aes(x = name,
+  geom_boxplot(aes(x = Group_Feature,
                    y = Pct_Dark_Phase,
                    fill = Method),
                alpha = 0.75) +
@@ -365,11 +365,11 @@ plot_dest <- MICRO %>%
   filter(Skip == "NoSkip",
          Analysis_Type == "Dark_Phase",
          Sample_Type == "Cross_section") %>%
-  mutate(name = fct_reorder(name,
+  mutate(Group_Feature = fct_reorder(Group_Feature,
                             Pct_Dark_Phase,
                             .fun = 'mean')) %>%
   ggplot() +
-  geom_boxplot(mapping = aes(x = name,
+  geom_boxplot(mapping = aes(x = Group_Feature,
                              y = Pct_Dark_Phase,
                              fill = Method),
                alpha = 0.75) +
@@ -385,12 +385,12 @@ plot_repl <- MICRO %>%
   filter(Skip == "NoSkip",
          Analysis_Type == "Dark_Phase",
          Sample_Type == "Replica") %>%
-  mutate(name = fct_reorder(name,
+  mutate(Group_Feature = fct_reorder(Group_Feature,
                             Pct_Dark_Phase,
                             .fun = 'mean')) %>%
   ggplot() +
   geom_boxplot(
-    mapping = aes(x = name,
+    mapping = aes(x = Group_Feature,
                   y = Pct_Dark_Phase,
                   fill = Method),
     alpha = 0.75
@@ -419,7 +419,7 @@ Since we are using both comparison methods and counting methods, it is important
 ```{r compare 1}
 
 compare1 <- MICRO %>%
-  group_by(name, Method) %>%
+  group_by(Group_Feature, Method) %>%
   summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
   pivot_wider(names_from = Method, values_from = avg) %>%
   ggplot(aes(Counting,
@@ -438,13 +438,9 @@ compare1 <- MICRO %>%
   coord_obs_pred()+
   theme_bw(10, "calibri")
 
-```
-
-```{r compare 2}
-
 compare2 <- MICRO %>%
   filter(Skip == "NoSkip") %>%
-  group_by(name, Method) %>%
+  group_by(Group_Feature, Method) %>%
   summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
   pivot_wider(names_from = Method, values_from = avg) %>%
   ggplot(aes(Counting, Comparison)) +
@@ -467,18 +463,24 @@ compare1 + compare2
 ```
 
   
-```{r fig.width = 8, fig.align = 'center', fig.cap= "Comparison vs counting for MLI GS (\u03BCm) by evaluator (skips included)"}
+```{r individuals vs average mli by counting method, fig.cap= "Individual performance for MLI GS (\u03BCm) by counting method (skips included)"}
+MICRO_MLI_Avg_Count <- MICRO %>%
+  filter(Method == "Counting") %>%
+  group_by(Group_Feature) %>%
+  summarize(MLI_Avg_Count = mean(Mean_Linear_Intercept, na.rm = T))
 
-MICRO %>%
-  group_by(name, Method, Evaluator_LANID) %>%
-  summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
-  pivot_wider(names_from = Method, values_from = avg) %>%
-  ggplot(aes(Counting, Comparison)) +
+MICRO_MLI_Indiv_Count <- MICRO %>% 
+  filter(Method == "Counting") %>%
+  group_by(Group_Feature, Evaluator_LANID) %>%
+  summarize(MLI_Avg_Count_Indiv = mean(Mean_Linear_Intercept, na.rm = T)) 
+
+full_join(MICRO_MLI_Avg_Count,MICRO_MLI_Indiv_Count) %>% 
+  ggplot(aes(MLI_Avg_Count, MLI_Avg_Count_Indiv)) +
   geom_point(alpha = 0.5,
              show.legend = F) +
   geom_smooth(method = "lm", se = F) +
-  labs(x = "counting",
-       y = "comparison") +
+  labs(x = "Average MLI GS from all evaluators  (\u03BCm)",
+      y = "Individual evaluator MLI GS (\u03BCm)") +
   theme_bw() +
   geom_abline(lwd = .5,
               lty = 3,
@@ -487,24 +489,26 @@ MICRO %>%
   coord_obs_pred()+
   theme(plot.margin = margin(0.5,0.5,0.5,0.5,"cm"))
 
-
-
-
 ```
-  
-```{r  fig.width = 8, fig.align = 'center', fig.cap= "Comparison vs counting for MLI GS (\u03BCm) by evaluator (skips excluded)"}
 
-MICRO %>%
-  filter(Skip == "NoSkip") %>%
-  group_by(name, Method, Evaluator_LANID) %>%
-  summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
-  pivot_wider(names_from = Method, values_from = avg) %>%
-  ggplot(aes(Counting, Comparison)) +
+```{r individuals vs average mli by comparison method, fig.cap= "Individual performance for MLI GS (\u03BCm) by comparison method (skips included)"}
+MICRO_MLI_Avg_Comp <- MICRO %>%
+  filter(Method == "Comparison") %>%
+  group_by(Group_Feature) %>%
+  summarize(MLI_Avg_Count = mean(Mean_Linear_Intercept, na.rm = T))
+
+MICRO_MLI_Indiv_Count <- MICRO %>% 
+  filter(Method == "Comparison") %>%
+  group_by(Group_Feature, Evaluator_LANID) %>%
+  summarize(MLI_Avg_Count_Indiv = mean(Mean_Linear_Intercept, na.rm = T)) 
+
+full_join(MICRO_MLI_Avg_Count,MICRO_MLI_Indiv_Count) %>% 
+  ggplot(aes(MLI_Avg_Count, MLI_Avg_Count_Indiv)) +
   geom_point(alpha = 0.5,
              show.legend = F) +
   geom_smooth(method = "lm", se = F) +
-  labs(x = "counting",
-       y = "comparison") +
+  labs(x = "Average MLI GS from all evaluators  (\u03BCm)",
+      y = "Individual evaluator MLI GS (\u03BCm)") +
   theme_bw() +
   geom_abline(lwd = .5,
               lty = 3,
@@ -522,7 +526,7 @@ The comparison method for dark phase is a method developed by PG&E, therefore is
 ```{r compare3}
 
 compare3 <- MICRO %>%
-  group_by(name, Method) %>%
+  group_by(Group_Feature, Method) %>%
   summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
   pivot_wider(names_from = Method, values_from = avg) %>%
   ggplot(aes(Counting, Comparison)) +
@@ -539,13 +543,9 @@ compare3 <- MICRO %>%
        subtitle = "Skips Included")+
   coord_obs_pred()
 
-```
-  
-```{r compare4}
-
 compare4 <- MICRO %>%
   filter(Skip == "NoSkip") %>%
-  group_by(name, Method) %>%
+  group_by(Group_Feature, Method) %>%
   summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
   pivot_wider(names_from = Method, values_from = avg) %>%
   ggplot(aes(Counting, Comparison)) +
@@ -566,18 +566,24 @@ compare4 <- MICRO %>%
   
 ```
   
-```{r fig.width=6.5,  fig.align='center', fig.cap= "Comparison vs counting for DP by evaluator (skips included)."}
+```{r individuals vs average dp by counting method, fig.cap= "Individual performance for DP (\u03BCm) by counting method (skips included)"}
+MICRO_DP_Avg_Count <- MICRO %>%
+  filter(Method == "Counting") %>%
+  group_by(Group_Feature) %>%
+  summarize(DP_Avg_Count = mean(Pct_Dark_Phase, na.rm = T))
 
-MICRO %>%
-  group_by(name, Sample_Type, Method, Evaluator_LANID) %>%
-  summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
-  pivot_wider(names_from = Method, values_from = avg) %>%
-  ggplot(aes(Counting, Comparison)) +
+MICRO_DP_Indiv_Count <- MICRO %>% 
+  filter(Method == "Counting") %>%
+  group_by(Group_Feature, Evaluator_LANID) %>%
+  summarize(DP_Avg_Count_Indiv = mean(Pct_Dark_Phase, na.rm = T)) 
+
+full_join(MICRO_DP_Avg_Count,MICRO_DP_Indiv_Count) %>% 
+  ggplot(aes(DP_Avg_Count, DP_Avg_Count_Indiv)) +
   geom_point(alpha = 0.5,
              show.legend = F) +
   geom_smooth(method = "lm", se = F) +
-  labs(x = "counting",
-       y = "comparison") +
+  labs(x = "Average DP from all evaluators  (%)",
+      y = "Individual evaluator DP (%)") +
   theme_bw() +
   geom_abline(lwd = .5,
               lty = 3,
@@ -587,26 +593,32 @@ MICRO %>%
   theme(plot.margin = margin(0.5,0.5,0.5,0.5,"cm"))
 
 ```
-  
-```{r fig.width=6.5,  fig.align='center', fig.cap= "Comparison vs counting for DP by evaluator (skips excluded)."}
 
-MICRO %>%
-  filter(Skip == "NoSkip") %>%
-  group_by(name, Sample_Type, Method, Evaluator_LANID) %>%
-  summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
-  pivot_wider(names_from = Method, values_from = avg) %>%
-  ggplot(aes(Counting, Comparison)) +
+```{r individuals vs average dp by comparison method, fig.cap= "Individual performance for DP (\u03BCm) by comparison method (skips included)"}
+MICRO_DP_Avg_Comp <- MICRO %>%
+  filter(Method == "Comparison") %>%
+  group_by(Group_Feature) %>%
+  summarize(DP_Avg_Comp = mean(Pct_Dark_Phase, na.rm = T))
+
+MICRO_DP_Indiv_Comp <- MICRO %>% 
+  filter(Method == "Comparison") %>%
+  group_by(Group_Feature, Evaluator_LANID) %>%
+  summarize(DP_Avg_Comp_Indiv = mean(Pct_Dark_Phase, na.rm = T)) 
+
+full_join(MICRO_DP_Avg_Comp,MICRO_DP_Indiv_Comp) %>% 
+  ggplot(aes(DP_Avg_Comp, DP_Avg_Comp_Indiv)) +
   geom_point(alpha = 0.5,
              show.legend = F) +
   geom_smooth(method = "lm", se = F) +
-  labs(x = "counting",
-       y = "comparison") +
+  labs(x = "Average DP from all evaluators  (%)",
+      y = "Individual evaluator DP (%)") +
   theme_bw() +
   geom_abline(lwd = .5,
               lty = 3,
               col = 'black') +
   facet_wrap(~ Evaluator_LANID) +
-  coord_obs_pred()
+  coord_obs_pred()+
+  theme(plot.margin = margin(0.5,0.5,0.5,0.5,"cm"))
 
 ```
 
@@ -619,7 +631,7 @@ Since we are targeting the use of non-destructive methods for integrity manageme
 ```{r compare5}
 
 compare5 <- MICRO %>%
-  group_by(name, Sample_Type) %>%
+  group_by(Group_Feature, Sample_Type) %>%
   summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
   pivot_wider(names_from = Sample_Type, values_from = avg) %>%
   ggplot(aes(Replica, Cross_section)) +
@@ -642,7 +654,7 @@ compare5 <- MICRO %>%
 
 compare6 <- MICRO %>%
   filter(Skip == "NoSkip") %>%
-  group_by(name, Sample_Type) %>%
+  group_by(Group_Feature, Sample_Type) %>%
   summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
   pivot_wider(names_from = Sample_Type, values_from = avg) %>%
   ggplot(aes(Replica, Cross_section)) +
@@ -666,7 +678,7 @@ compare5 + compare6
 ```{r compare7}
 
 compare7 <- MICRO %>%
-  group_by(name, Sample_Type, Method) %>%
+  group_by(Group_Feature, Sample_Type, Method) %>%
   summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
   pivot_wider(names_from = Sample_Type, values_from = avg) %>%
   ggplot(aes(col = Method, Replica, Cross_section)) +
@@ -690,7 +702,7 @@ compare7 <- MICRO %>%
 
 compare8 <- MICRO %>%
   filter(Skip == "NoSkip") %>%
-  group_by(name, Sample_Type, Method) %>%
+  group_by(Group_Feature, Sample_Type, Method) %>%
   summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
   pivot_wider(names_from = Sample_Type, values_from = avg) %>%
   ggplot(aes(col = Method, Replica, Cross_section)) +
@@ -717,7 +729,7 @@ compare7 + compare8
 ```{r compare9 }
 
 compare9 <- MICRO %>%
-  group_by(name, Sample_Type) %>%
+  group_by(Group_Feature, Sample_Type) %>%
   summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
   pivot_wider(names_from = Sample_Type, values_from = avg) %>%
   ggplot(aes(Replica, Cross_section)) +
@@ -740,7 +752,7 @@ coord_obs_pred()
 
 compare10 <- MICRO %>%
   filter(Skip == "NoSkip") %>%
-  group_by(name, Sample_Type) %>%
+  group_by(Group_Feature, Sample_Type) %>%
   summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
   pivot_wider(names_from = Sample_Type, values_from = avg) %>%
   ggplot(aes(Replica, Cross_section)) +
@@ -764,7 +776,7 @@ compare9 + compare10
 ```{r compare11}
 
 compare11 <- MICRO %>%
-  group_by(name, Sample_Type, Method) %>%
+  group_by(Group_Feature, Sample_Type, Method) %>%
   summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
   pivot_wider(names_from = Sample_Type, values_from = avg) %>%
   ggplot(aes(col = Method,
@@ -790,7 +802,7 @@ coord_obs_pred() +
 
 compare12 <- MICRO %>%
   filter(Skip == "NoSkip") %>%
-  group_by(name, Sample_Type, Method) %>%
+  group_by(Group_Feature, Sample_Type, Method) %>%
   summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
   pivot_wider(names_from = Sample_Type, values_from = avg) %>%
   ggplot(aes(col = Method,
@@ -1122,8 +1134,13 @@ ggplot(ndt_ten_comp_GS, aes(x=wall)) +
 
 ```
 
+```{r histo grade, fig.width=7.5}
+library(ggplot2)
+ggplot(ndt_ten_comp_GS, aes(x=grade)) +
+  geom_bar(color="black", fill="steelblue")
 
-## GS, DP, and Grade
+```
+
 
 ## GS, DP, and Vintage  
 ```{r GS, DP, and Vintage, fig.height = 3, fig.width = 10}
@@ -1139,6 +1156,30 @@ plot2 <- ndt_ten_comp_GS %>%
 plot3 <- ndt_ten_comp_GS %>% 
   ggplot(aes(year, pct_dark_phase)) +
   geom_point(color="steelblue")
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,ncol = 3)
+
+```
+
+## GS, DP, and Grade
+```{r GS, DP, and Grade, fig.height = 3, fig.width = 10}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(grade, astm_grain_size)) +
+  geom_boxplot(fill="steelblue")+
+  coord_flip()
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(grade, mean_linear_intercept)) +
+  geom_boxplot(fill="steelblue")+
+coord_flip()
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(grade, pct_dark_phase)) +
+  geom_boxplot(fill="steelblue")+
+  coord_flip()
 
  grid.arrange(          
   # Apply grid.arrange function
@@ -1701,8 +1742,8 @@ rlm_aug %>%
 # complete %>% 
 #   pivot_longer(-CVN_US_FS) %>% 
 #   ggplot(aes(value, CVN_US_FS))+
-#   geom_point(aes(col=name), show.legend = F)+
-#   facet_wrap( ~ name, scales = "free_x")+
+#   geom_point(aes(col=Group_Feature), show.legend = F)+
+#   facet_wrap( ~ Group_Feature, scales = "free_x")+
 #   geom_smooth(method = "lm", se=F)
 
 ```
