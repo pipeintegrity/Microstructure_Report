@@ -136,6 +136,11 @@ MICRO %>%
 ```
   
 ## Evaluator Performance vs Averages Plots  
+
+The plots below indicate how the evaluations by each individual evaluator differ from the average of all evaluations.
+
+Mean Linear Intercept Grain Size (MLI-GS) by the Counting Method:
+
 ```{r individuals vs average mli by counting method, fig.cap= "Individual performance for MLI GS (\u03BCm) by counting method (skips included)"}
 MICRO_MLI_Avg_Count <- MICRO %>%
   filter(Method == "Counting") %>%
@@ -165,6 +170,8 @@ MICRO_MLI_Count%>%
   theme(plot.margin = margin(0.5,0.5,0.5,0.5,"cm"))
 
 ```
+
+Mean Linear Intercept Grain Size (MLI-GS) by the Comparison Method:
 
 ```{r individuals vs average mli by comparison method, fig.cap= "Individual performance for MLI GS (\u03BCm) by comparison method (skips included)"}
 MICRO_MLI_Avg_Comp <- MICRO %>%
@@ -198,6 +205,8 @@ MICRO_MLI_Comp%>%
 
 ```
 
+Dark Phase (DP) by the Counting Method:
+
 ```{r individuals vs average dp by counting method, fig.cap= "Individual performance for DP (%) by counting method (skips included)"}
 MICRO_DP_Avg_Count <- MICRO %>%
   filter(Method == "Counting") %>%
@@ -229,6 +238,8 @@ MICRO_DP_Count%>%
   theme(plot.margin = margin(0.5,0.5,0.5,0.5,"cm"))
 
 ```
+
+Dark Phase (DP) by the Comparison Method:
 
 ```{r individuals vs average dp by comparison method, fig.cap= "Individual performance for DP (%) by comparison method (skips included)"}
 MICRO_DP_Avg_Comp <- MICRO %>%
