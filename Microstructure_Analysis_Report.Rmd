@@ -77,9 +77,9 @@ MICRO %>%
   scale_x_continuous(breaks = 1:12) +
   scale_color_viridis_d(option = "C") +
   labs(
-    title = paste("Cummulative Evaluations by ID for", year(Sys.Date()) - 1),
+    title = paste("Cumulative Evaluations by ID for", year(Sys.Date()) - 1),
     x = "Month",
-    y = "Cummulative Count",
+    y = "Cumulative Count",
     color="Evaluator"
   )
   
@@ -96,9 +96,9 @@ MICRO %>%
   scale_x_continuous(breaks = 1:12) +
   scale_color_viridis_d(option = "C") +
   labs(
-    title = paste("Cummulative Evaluations by ID for", year(Sys.Date())),
+    title = paste("Cumulative Evaluations by ID for", year(Sys.Date())),
     x = "Month",
-    y = "Cummulative Count",
+    y = "Cumulative Count",
     color="Evaluator"
   )
 
@@ -118,7 +118,7 @@ MICRO %>%
   filter(year == year(Sys.Date())) %>%
   # factor(month, levels = month.abb))
   summarise(n = n()) %>%
-  mutate(#cummulative = cumsum(n),
+  mutate(#Cumulative = cumsum(n),
     month = month.abb[month_num],
     month = factor(month, levels = month.abb)) %>%
   arrange(month) %>%
