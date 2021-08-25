@@ -3,11 +3,8 @@ title: "Microstructure Report for Rabbit Springs (Draft)"
 author: "Nathan Switzner and Joel Anderson"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 output: 
-  html_document:
-    toc: TRUE
-    toc_float: TRUE
-    theme: journal
-    number_sections: FALSE
+  word_document
+always_allow_html: true
 ---
 
 ```{r setup, include=FALSE}
@@ -27,6 +24,7 @@ library(patchwork)
 library(tidymodels)
 library(patchwork)
 # library(rstanarm)
+library(kableExtra)
 theme_set(theme_bw(16)) #set theme to save typing
 ```
 
@@ -357,8 +355,16 @@ station_micro <- read_excel("Microstructure_Evaluation_Worksheet_2020_08_20_Rabb
   summarize(pct_dark_phase = round(mean(pct_dark_phase, na.rm = TRUE),1),
             astm_grain_size = round(mean(astm_grain_size, na.rm = TRUE),1),
             mean_linear_intercept = round(mean(mean_linear_intercept, na.rm = TRUE),1)) %>% 
-  ungroup()
-
+  ungroup() %>% 
+  mutate(
+    gs_min = astm_grain_size - 1,
+    gs_max = astm_grain_size + 1,
+    dp_min = pct_dark_phase - pct_dark_phase * .2,
+    dp_max = pct_dark_phase + pct_dark_phase * .2
+    # ,
+    # yearstart = min(ndt_ten_comp_micro$year, na.rm = TRUE),
+    # yearend = max(ndt_ten_comp_micro$year, na.rm = TRUE)
+  )
 ```
 
 
@@ -379,7 +385,6 @@ station_feature_wt_ndt <- eca_feature %>%
     "IIT UTS (ksi)" = round(iituts, 1)
     ) %>% 
   select(
-    group,
     feature,
     "feature type",
     "seam type",
@@ -400,10 +405,6 @@ comparison of carbon content with dark phase for a consistency check. Show the c
 
 compare Mn content with grain size for a consistency check
 
-Final station reports should be in Word so they can facilitate feedback and integrate easily into a package.
-
-Add the uncertainty to the data table for grain size and dark phase, and draw the band in the correlation plots.
-
 Ask Joel to make sure there is nothing in the microstructure report that disagrees with the grade result.
 
 # Feature Information   
@@ -411,9 +412,16 @@ Ask Joel to make sure there is nothing in the microstructure report that disagre
 RSI-Pipeline Solutions was requested by Pacific Gas and Electric's (PG&E) Facilities Integrity Management Program (FIMP) to analyze microstructures from a facility known as Rabbit Springs.
 
 The features of interest along with relevant information are listed in the following table. 
-
 ```{r station feature table}
-DT::datatable(station_feature_wt_ndt)
+knitr::kable(station_feature_wt_ndt)
+```
+
+```{r station feature table 2}
+knitr::kable(station_feature_wt_ndt, align = c(rep('c', times=8)), col.names = c("Feature", "Type", "Seam Type", "Install Year", "OD", "WT", "IIT Yield Strength (ksi)", "IIT Tensile Strength (ksi)" ))  %>% remove_column(1)
+
+# kable(datatable,align=c(rep('c',times=7)),
+# col.names = c("Copy","Sigma Est","Sigma Lower","Sigma Upper", 
+# "Lambda Est","Lambda Lower","Lambda Upper"),digits=3)
 
 ```
 
@@ -443,7 +451,8 @@ station_comp <- eca_feature %>%
     "Si (wt%, filings)"
   )
 
-DT::datatable(station_comp)
+knitr::kable(station_comp) %>% remove_column(1)
+
 
 ```
 
@@ -453,31 +462,31 @@ DT::datatable(station_comp)
 
 The microstructures that were analyzed are shown below. For the in-situ images, the circular viewing area was determined to be 465 μm in diameter. This scale is based on images taken by the vendor of a calibrated reference slide and is important for grain size estimation.
 
-![](RabbitSprings/_JT127_Field.jpg){height=350px} ![](RabbitSprings/_JT127_Replica.jpg){height=350px}
+![](RabbitSprings/_JT127_Field.jpg){height=250px} ![](RabbitSprings/_JT127_Replica.jpg){height=250px}
 <br />
 Feature JT-127 micrographs: in-situ (left) and replica (right). 
 <br />
 <br />
-![](RabbitSprings/_JT138.5_Field.jpg){height=350px} ![](RabbitSprings/_JT138.5_Replica.jpg){height=350px}<br />
+![](RabbitSprings/_JT138.5_Field.jpg){height=250px} ![](RabbitSprings/_JT138.5_Replica.jpg){height=250px}<br />
 Feature JT-138.5 micrographs: in-situ (left) and replica (right).
 <br />
 <br />
-![](RabbitSprings/_JT51_Field.jpg){height=350px} ![](RabbitSprings/_JT51_Replica.jpg){height=350px}
+![](RabbitSprings/_JT51_Field.jpg){height=250px} ![](RabbitSprings/_JT51_Replica.jpg){height=250px}
 <br />
 Feature JT-51 micrographs: in-situ (left) and replica (right).
 <br />
 <br />
-![](RabbitSprings/_JT62.5_Field.jpg){height=350px} ![](RabbitSprings/_JT62.5_Replica.jpg){height=350px}
+![](RabbitSprings/_JT62.5_Field.jpg){height=250px} ![](RabbitSprings/_JT62.5_Replica.jpg){height=250px}
 <br />
 Feature JT-62.5 micrographs: in-situ (left) and replica (right).
 <br />
 <br />
-![](RabbitSprings/_JT74.5_Field.jpg){height=350px} ![](RabbitSprings/_JT74.5_Replica.jpg){height=350px}
+![](RabbitSprings/_JT74.5_Field.jpg){height=250px} ![](RabbitSprings/_JT74.5_Replica.jpg){height=250px}
 <br />
 Feature JT-74.5 micrographs: in-situ (left) and replica (right).
 <br />
 <br />
-![](RabbitSprings/_JT77.4_Field.jpg){height=350px} ![](RabbitSprings/_JT77.4_Replica.jpg){height=350px}
+![](RabbitSprings/_JT77.4_Field.jpg){height=250px} ![](RabbitSprings/_JT77.4_Replica.jpg){height=250px}
 <br />
 Feature JT-77.4 micrographs: in-situ (left) and replica (right).
 <br />
@@ -504,7 +513,7 @@ station_micro_DT <- station_micro %>%
     "grain size (μm)"
   )
 
-DT::datatable(station_micro_DT)
+knitr::kable(station_micro_DT) %>% remove_column(1)
 
 
 ```
@@ -516,54 +525,147 @@ Quantitative data from specific features have been compared to .... microstructu
 
 ## GS, DP, and Vintage  
 ```{r GS, DP, and Vintage, fig.height = 4, fig.width = 10}
-plot1 <- ndt_ten_comp_micro %>% 
-  ggplot(aes(astm_grain_size, year)) +
-  geom_point(color="steelblue")+
-  geom_vline(data = station_micro , aes(xintercept = astm_grain_size, col = feature), lty = 2, show.legend = FALSE)
 
-plot2 <- ndt_ten_comp_micro %>% 
-  ggplot(aes(pct_dark_phase, year)) +
-  geom_point(color="steelblue")+
-  geom_vline(data = station_micro , aes(xintercept = pct_dark_phase, col = feature), lty = 2)
-  
+plot1 <- ggplot() +
+  geom_rect(
+    data = station_micro,
+    aes(
+      xmin = gs_min,
+      xmax = gs_max,
+      ymin = c(1925, 1928, 1931),
+      ymax = c(2024, 2018, 2021),
+      fill = feature
+    ),
+    alpha = 0.2,
+    show.legend = FALSE
+  ) +
+  geom_point(data = ndt_ten_comp_micro, aes(astm_grain_size, year)) +
+  geom_vline(
+    data = station_micro,
+    aes(xintercept = astm_grain_size, col = feature),
+    lty = 2,
+    show.legend = FALSE
+  ) +
+  scale_y_continuous(breaks = seq(1940, 2020, by = 20)) +
+  scale_x_continuous(breaks = seq(8, 14, by = 1))
+
+plot2 <- ggplot() +
+  geom_rect(
+    data = station_micro,
+    aes(
+      xmin = dp_min,
+      xmax = dp_max,
+      ymin = c(1925, 1928, 1931),
+      ymax = c(2024, 2018, 2021),
+      fill = feature
+    ),
+    alpha = 0.2,
+    show.legend = FALSE
+  ) +
+  geom_point(data = ndt_ten_comp_micro, aes(pct_dark_phase, year)) +
+  geom_vline(
+    data = station_micro,
+    aes(xintercept = pct_dark_phase, col = feature),
+    lty = 2
+  ) +
+  scale_y_continuous(breaks = seq(1940, 2020, by = 20))
+
 plot1 + plot2
- 
+
 ```
 
 ## GS, DP, and Charpy V Notch Upper Shelf Energy
-```{r GS, DP, and Charpy V Notch Upper Shelf Energy, fig.height = 4, fig.width = 10}
+```{r GS, DP, and Charpy, fig.height = 4, fig.width = 10}
 
-plot1 <- ndt_ten_comp_micro %>% 
-  ggplot(aes(astm_grain_size, CVN_US_FS)) +
-  geom_point(color="steelblue")+  
-  scale_y_log10()+
-  geom_vline(data = station_micro , aes(xintercept = astm_grain_size, col = feature), lty = 2, show.legend = FALSE)
+plot1 <- ggplot() +
+  geom_rect(
+    data = station_micro,
+    aes(
+      xmin = gs_min,
+      xmax = gs_max,
+      ymin = c(8, 4, 12),
+      ymax = c(300, 280, 320),
+      fill = feature
+    ),
+    alpha = 0.2,
+    show.legend = FALSE
+  ) +
+  geom_point(data = ndt_ten_comp_micro, aes(astm_grain_size, CVN_US_FS)) +
+  geom_vline(
+    data = station_micro,
+    aes(xintercept = astm_grain_size, col = feature),
+    lty = 2,
+    show.legend = FALSE
+  ) 
 
-
-plot2 <- ndt_ten_comp_micro %>% 
-  ggplot(aes(pct_dark_phase, CVN_US_FS)) +
-  geom_point(color="steelblue")+
-  scale_y_log10()+
-  geom_vline(data = station_micro , aes(xintercept = pct_dark_phase, col = feature), lty = 2)
-
+plot2 <- ggplot() +
+  geom_rect(
+    data = station_micro,
+    aes(
+      xmin = dp_min,
+      xmax = dp_max,
+      ymin = c(5, 10, 15),
+      ymax = c(280, 300, 320),
+      fill = feature
+    ),
+    alpha = 0.2,
+    show.legend = FALSE
+  ) +
+  geom_point(data = ndt_ten_comp_micro, aes(pct_dark_phase, CVN_US_FS)) +
+  geom_vline(
+    data = station_micro,
+    aes(xintercept = pct_dark_phase, col = feature),
+    lty = 2
+  ) 
 
 plot1 + plot2
+
 ```
 
 
 ## GS, DP, and Charpy V Notch Transition Temperature
 ```{r GS, DP, and Charpy V Notch Transition Temperature, fig.height = 4, fig.width = 10}
 
-plot1 <- ndt_ten_comp_micro %>% 
-  ggplot(aes(astm_grain_size, TT_FS_F)) +
-  geom_point(color="steelblue")+
-  geom_vline(data = station_micro , aes(xintercept = astm_grain_size, col = feature), lty = 2, show.legend = FALSE)
+plot1 <- ggplot() +
+  geom_rect(
+    data = station_micro,
+    aes(
+      xmin = gs_min,
+      xmax = gs_max,
+      ymin = c(-140, -130, -150),
+      ymax = c(170, 180, 160),
+      fill = feature
+    ),
+    alpha = 0.2,
+    show.legend = FALSE
+  ) +
+  geom_point(data = ndt_ten_comp_micro, aes(astm_grain_size, TT_FS_F)) +
+  geom_vline(
+    data = station_micro,
+    aes(xintercept = astm_grain_size, col = feature),
+    lty = 2,
+    show.legend = FALSE
+  ) 
 
-plot2 <- ndt_ten_comp_micro %>% 
-  ggplot(aes(pct_dark_phase, TT_FS_F)) +
-  geom_point(color="steelblue")+
-  geom_vline(data = station_micro , aes(xintercept = pct_dark_phase, col = feature), lty = 2)
-
+plot2 <- ggplot() +
+  geom_rect(
+    data = station_micro,
+    aes(
+      xmin = dp_min,
+      xmax = dp_max,
+      ymin = c(-140, -130, -140),
+      ymax = c(170, 180, 170),
+      fill = feature
+    ),
+    alpha = 0.2,
+    show.legend = FALSE
+  ) +
+  geom_point(data = ndt_ten_comp_micro, aes(pct_dark_phase, TT_FS_F)) +
+  geom_vline(
+    data = station_micro,
+    aes(xintercept = pct_dark_phase, col = feature),
+    lty = 2
+  ) 
 
 plot1 + plot2
 ```
