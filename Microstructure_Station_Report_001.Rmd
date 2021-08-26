@@ -25,6 +25,7 @@ library(tidymodels)
 library(patchwork)
 # library(rstanarm)
 library(kableExtra)
+library(flextable)
 theme_set(theme_bw(16)) #set theme to save typing
 ```
 
@@ -43,8 +44,6 @@ tp_plot <- function(df, x, y) {
 }
 
 ```
-
-
 
 ```{r ECA feature information data import}
 # Composition ------------------------------------------------------------
@@ -112,17 +111,6 @@ eca_feature <-
   read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
              sheet = "Features") %>%
   janitor::clean_names() %>%
-  # select(
-  #   group,
-  #   feature_id,
-  #   feature_type,
-  #   grade,
-  #   od_inch,
-  #   seam_type,
-  #   recorded_nominal_wt_inch,
-  #   pg_e_install_year,
-  #   mfr_year
-  # ) %>%
   rename(
     OD = od_inch,
     wall = recorded_nominal_wt_inch,
@@ -234,13 +222,9 @@ read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
 eca_wt <- read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
                      sheet = "Wall Thickness")  %>%
   clean_names() %>%
-  filter(str_detect(location_type, "AFG", negate = T)) %>%  
+  filter(str_detect(location_type, "AFG", negate = T)) %>%  #remove wall thickness measures after grind (AFG)
   group_by(group, feature) %>%
   summarize(wt_in = mean(measurement_in, na.rm = T))  #%>%
-  # select(group,
-  #        feature,
-  #          wt_in)
-#remove any wall thickness measurements after grind (AFG)
 
 ## Charpy data ----------------------------------------------------------       
 
@@ -283,7 +267,7 @@ eca_cvn <- read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
   select("group", "feature", "CVN_US_FS", "TT_FS_F")
 #-------------------------------------------------------------------------
 
-fimp_micro <-
+eca_micro <-
   read_excel("Microstructure_Data_Collection_Online_2021_01_05_S5CJ.xlsx",
              sheet = "Collection2") %>%
   rename(
@@ -309,7 +293,7 @@ fimp_micro <-
   ungroup()
 
 ## Join the data -----------------------------------------------------
-ndt_ten_comp <- eca_ndt %>%
+eca_all <- eca_ndt %>%
   full_join(eca_feature,
             by = c("group", "feature")) %>%
   full_join(eca_comp,
@@ -317,18 +301,129 @@ ndt_ten_comp <- eca_ndt %>%
   full_join(eca_tensile,
             by = c("group", "feature")) %>%
   full_join(eca_cvn, 
-            by = c("group", "feature")) %>% 
-  full_join(fimp_micro, 
-            by = c("group", "feature")) %>% 
-  ungroup() %>% 
-  distinct() %>% 
-  mutate(dt = OD/wall)
+            by = c("group", "feature")) %>%
+  full_join(eca_wt, 
+            by = c("group", "feature")) %>%
+  full_join(eca_micro, 
+            by = c("group", "feature")) 
 
-ndt_ten_comp_micro <- as.data.frame(ndt_ten_comp[complete.cases(ndt_ten_comp[ , "astm_grain_size"]),]) 
+eca_all_micro_complete <- as.data.frame(eca_all[complete.cases(eca_all[ , "astm_grain_size"]),]) 
 
 ```
 
-```{r microstructural station data import}
+# Exective Summary  
+
+RSI-Pipeline Solutions was requested by Pacific Gas and Electric's (PG&E) Facilities Integrity Management Program (FIMP) to analyze images from six microstructural replicas (one per feature) from the Rabbit Springs facility. The objective was to quantify and characterize the microstructures to determine whether they were consistent with the reported vintage. Secondly, the microstructures were used to qualitatively assess the expected feature toughness properties.
+
+Firstly, the feature microstructures did not appear inconsistent with expectations for the reported vintages of 1980 and 1991. Secondly, based on the assessments of grain size and dark phase, the upper shelf energy and ductile to brittle transition temperature appeared moderate (likely to be neither extremely tough nor extremely brittle).
+
+# Feature Information   
+
+The relevant background information for the features of interest are listed Table 1. This information is useful for general knowledge as-well-as ruling out impossible groupings based on differences in feature type, seam type, outside diameter (OD), and wall thickness (WT).
+
+```{r station feature table prep}
+
+## Join the station data -----------------------------------------------------
+station_feature_wt_ndt <- eca_all %>%
+    filter(group == "Rabbit Springs",
+        feature %in% c("JT-51", "JT-62.5", "JT-74.5", "JT-77.4", "JT-127", "JT-138.5")) %>% 
+  select(
+    group,
+    feature,
+    feature_type,
+    seam_type,
+    year,
+    OD,
+    wt_in)
+
+flextable(station_feature_wt_ndt[1:6,-1]) %>% 
+  set_caption("Table 1 Feature Information.") %>% 
+  set_formatter(year = function(x) sprintf("%.00f", x),
+                OD = function(x) sprintf("%.01f", x),
+                wt_in = function(x) sprintf("%.03f", x),
+                iitys_5 = function(x) sprintf("%.01f", x),
+                iituts = function(x) sprintf("%.01f", x)) %>%
+  set_header_labels(values = list(feature = 'Feature',
+                                  feature_type = "Type",
+                                  seam_type = "Seam Type",
+                                  year = "Year",
+                                  OD = "OD (in)",
+                                  wt_in = "WT (in)")) %>% 
+  align(j = -1, align = "center", part = "all") %>% 
+  autofit()
+```
+
+# Compositional Data from Filings for Grouping   
+
+The compositional elements, carbon (C), manganese (Mn), sulfur (S), and silicon (Si) are important in steelmaking and are also generally reliable elements for identification of possible groups of pipe, when estimated using filings removed from the pipe surface. The following table provides the filings analysis for C, Mn, S, and Si. For this station, features JT-51, JT-62.5, JT-127, and JT-138.5 had essentially similar compositions, but features JT-74.5 and JT-77.4 differed significantly in terms of Si, Mn, and S content.
+
+```{r station comp}
+
+## Join the station data -----------------------------------------------------
+station_feature_wt_ndt <- eca_all %>%
+    filter(group == "Rabbit Springs",
+        feature %in% c("JT-51", "JT-62.5", "JT-74.5", "JT-77.4", "JT-127", "JT-138.5")) %>% 
+  select(
+    group,
+    feature,
+    c,
+    mn,
+    si,
+    s
+  )
+
+flextable(station_feature_wt_ndt[1:6,-1]) %>% 
+  set_caption("Table 2 Filings Composition") %>% 
+  set_formatter(c = function(x) sprintf("%.02f", x),
+                mn = function(x) sprintf("%.02f", x),
+                si = function(x) sprintf("%.02f", x),
+                s = function(x) sprintf("%.03f", x)) %>% 
+  set_header_labels(values = list(feature = 'Feature',
+                                  c = "C (wt%)",
+                                  mn = "Mn (wt%)",
+                                  si = "Si (wt%)",
+                                  s = "S (wt%)")) %>% 
+  align(j = -1, align = "center", part = "all") %>% 
+  autofit()
+
+```
+
+# Microstructure Images 
+
+The microstructures that were analyzed are shown below. Both an in-situ image and an image taken in with a laboratory microscope of a field replica are shown. Typically the in-situ images are not used for quantitative evaluation. However, due to the use of silicone "Repliset" replication media, the replicates did not adequately replicate the details of the grain boundaries and dark phase. The poor resolution and lack of important features made the quantitative evaluation difficult. 
+
+For the in-situ images, the circular viewing area was determined to be 465 μm in diameter. This scale is based on images taken by the vendor of a calibrated reference slide and is important for grain size estimation. The replica images had a printed scale bar, which was useful for grain size estimation, however the replica images did not have distinct grain boundries due to the use of silicone replication medium.
+
+All images apparently exhibit a light phase and a dark phase, which indicate ferrite and pearlite constituents, respectively. For features JT-127, JT-138.5, JT-51, and JT-62.5, the pearlite appears somewhat unclear or degenerated. There may be a number of reasons for the lack of clarity, but one possibility is a long hold time at a temperature below 700 °C (~1300 °F), which allows redistribution of the carbon. Decarburization of the surface is another possibility. Features JT-74.5 and JT-77.4 exhibited more clarity of the grain boundaries and dark phase (pearlite constituent). Visually, the microstructures for all six features meet expectations for the surface microstructure of hot rolled or normalized steel linepipe.
+
+
+![](RabbitSprings/_JT127_Field.jpg){height=250px} ![](RabbitSprings/_JT127_Replica.jpg){height=250px}  
+Feature JT-127 micrographs: in-situ (left) and replica (right).  
+   
+![](RabbitSprings/_JT138.5_Field.jpg){height=250px} ![](RabbitSprings/_JT138.5_Replica.jpg){height=250px}  
+Feature JT-138.5 micrographs: in-situ (left) and replica (right).  
+  
+![](RabbitSprings/_JT51_Field.jpg){height=250px} ![](RabbitSprings/_JT51_Replica.jpg){height=250px}  
+Feature JT-51 micrographs: in-situ (left) and replica (right).  
+  
+![](RabbitSprings/_JT62.5_Field.jpg){height=250px} ![](RabbitSprings/_JT62.5_Replica.jpg){height=250px}  
+Feature JT-62.5 micrographs: in-situ (left) and replica (right).  
+  
+![](RabbitSprings/_JT74.5_Field.jpg){height=250px} ![](RabbitSprings/_JT74.5_Replica.jpg){height=250px}  
+Feature JT-74.5 micrographs: in-situ (left) and replica (right).  
+  
+![](RabbitSprings/_JT77.4_Field.jpg){height=250px} ![](RabbitSprings/_JT77.4_Replica.jpg){height=250px}  
+Feature JT-77.4 micrographs: in-situ (left) and replica (right).  
+  
+# Quantitative Evaluations  
+
+For the remainder of this analysis, features JT-51, JT-62.5, JT-127, and JT-138.5 were grouped together based on similarities in the microstructure as-well-as feature type, seam type, OD, WT, carbon, sulfur, manganese, and silicon content. Due to the use of silicone "Repliset" replication media, the replicates did not adequately replicate the details of the grain boundaries and dark phase. The poor resolution and lack of important features made the quantitative evaluation difficult. The quantitative results should be viewed as estimates. Quantification was performed by one subject matter expert using the ASTM E112 comparison method for grain size estimation and the PG&E/RSI-PS developed comparison method for dark phase estimation. The in-situ images were used for quantification, and the replica images were used for reference.
+
+The results of the quantitative evaluations of grain size (ASTM) and dark phase (%) for the features are provided in Table 3. Per ASTM E112, the repeatability and reproducibility of comparison ratings for grain size are generally ±1 grain size number. The repeatability and reproducibility of the comparison ratings for dark phase are not yet known, but a reasonable estimate is ±20% of the value.
+
+```{r station_micro data table}
+# Station microstructure data import from the Excel evaluation worksheet
+# In the Excel evaluation worksheet I created an additional row for the averages of the features that are too similar to distinguish: JT-127/138.5/51/62.5/127
 
 station_micro <- read_excel("Microstructure_Evaluation_Worksheet_2020_08_20_Rabbit_Springs.xlsm",
                       sheet = "4)Values") %>%
@@ -355,180 +450,54 @@ station_micro <- read_excel("Microstructure_Evaluation_Worksheet_2020_08_20_Rabb
   summarize(pct_dark_phase = round(mean(pct_dark_phase, na.rm = TRUE),1),
             astm_grain_size = round(mean(astm_grain_size, na.rm = TRUE),1),
             mean_linear_intercept = round(mean(mean_linear_intercept, na.rm = TRUE),1)) %>% 
-  ungroup() %>% 
+  ungroup() 
+
+station_micro_group <- station_micro %>% 
+  filter(group == "Rabbit Springs",
+        feature %in% c("JT-74.5", "JT-77.4", "JT-51/62.5/127/138.5")) %>% 
+  select(
+    group,
+    feature,
+    astm_grain_size,
+    pct_dark_phase
+  )
+
+flextable(station_micro_group[1:3,-1]) %>% 
+  set_caption("Table 3 Quantitative Evaluation Results.") %>% 
+  set_formatter(astm_grain_size = function(x) sprintf("%.01f", x),
+                pct_dark_phase = function(x) sprintf("%.00f", x)) %>% 
+  set_header_labels(values = list(feature = 'Feature',
+                                  astm_grain_size = "ASTM Grain Size",
+                                  pct_dark_phase = "Dark Phase (%)"
+                                  )) %>% 
+  align(j = -1, align = "center", part = "all") %>% 
+  autofit()
+
+```
+
+
+# Vintage Correlation  
+
+The microstructure evaluation results for the features from Rabbit Springs were overlaid with the trends identified from the validation data set as shown in the following plot. The grayscale points represent the data from the features from the validation dataset. The shaded regions represent the expected range of grain size and dark phase from the station features, which the vertical dotted line indicating the nominal value. 
+
+The validation dataset includes quantitative evaluations of grain size and dark phase percent by more than five trained evaluators. There were typically one to two images evaluated per feature. Two methods were used for each grain size analysis, counting and comparison methods. The counting and comparison methods for grain size are based on the ASTM E112 Jeffries planimetric method and comparison method, respectively. Two methods were also used for each dark phase analysis, counting and comparison methods. The counting method for dark phase estimation is based on ASTM E562, and the comparison method for dark phase estimation was developed by PG&E.
+
+Most of the features exhibited a grain size in the range of ~9.5-10.5, which can be observed for steels of all vintages. Feature JT-77.4 appeared to exhibit a finer grain size, which could indicate that it is more modern than the other features. The amount of dark phase in the features from Rabbit Springs apparently could be exhibited by line pipe for a variety of vintages from ~1930 or 1940 to present day, depending on the grade. 
+
+```{r addition of gs and dp min and max for the plot rectangles}
+station_micro_plots <- station_micro_group %>% 
   mutate(
     gs_min = astm_grain_size - 1,
     gs_max = astm_grain_size + 1,
     dp_min = pct_dark_phase - pct_dark_phase * .2,
-    dp_max = pct_dark_phase + pct_dark_phase * .2
-    # ,
-    # yearstart = min(ndt_ten_comp_micro$year, na.rm = TRUE),
-    # yearend = max(ndt_ten_comp_micro$year, na.rm = TRUE)
-  )
+    dp_max = pct_dark_phase + pct_dark_phase * .2)
 ```
 
-
-```{r station feature table prep}
-
-## Join the station data -----------------------------------------------------
-station_feature_wt_ndt <- eca_feature %>%
-  full_join(eca_wt, by = c("group", "feature")) %>% 
-  full_join(eca_ndt, by = c("group", "feature")) %>% 
-  filter(group == "Rabbit Springs",
-        feature %in% c("JT-51", "JT-62.5", "JT-74.5", "JT-77.4", "JT-127", "JT-138.5")) %>% 
-  mutate(
-    "feature type" = feature_type,
-    "seam type" = seam_type,
-    "OD (in)" = OD,
-    "WT (in)" = round(wt_in, 3),
-    "IIT YS (ksi)" = round(iitys_5, 1),
-    "IIT UTS (ksi)" = round(iituts, 1)
-    ) %>% 
-  select(
-    feature,
-    "feature type",
-    "seam type",
-    year,
-    "OD (in)",
-    "WT (in)",
-    "IIT YS (ksi)", 
-    "IIT UTS (ksi)"
-  )
-```
-
-
-# Updates needed:
-
-plot of year vs silicon and sulfur in appendix with the Rabbit Springs data overlaid
-
-comparison of carbon content with dark phase for a consistency check. Show the calculated expected equilibrium pct Pearlite phase based on the carbon content and then show the measured dark phase
-
-compare Mn content with grain size for a consistency check
-
-Ask Joel to make sure there is nothing in the microstructure report that disagrees with the grade result.
-
-# Feature Information   
-
-RSI-Pipeline Solutions was requested by Pacific Gas and Electric's (PG&E) Facilities Integrity Management Program (FIMP) to analyze microstructures from a facility known as Rabbit Springs.
-
-The features of interest along with relevant information are listed in the following table. 
-```{r station feature table}
-knitr::kable(station_feature_wt_ndt)
-```
-
-```{r station feature table 2}
-knitr::kable(station_feature_wt_ndt, align = c(rep('c', times=8)), col.names = c("Feature", "Type", "Seam Type", "Install Year", "OD", "WT", "IIT Yield Strength (ksi)", "IIT Tensile Strength (ksi)" ))  %>% remove_column(1)
-
-# kable(datatable,align=c(rep('c',times=7)),
-# col.names = c("Copy","Sigma Est","Sigma Lower","Sigma Upper", 
-# "Lambda Est","Lambda Lower","Lambda Upper"),digits=3)
-
-```
-
-The compositional elements, carbon (C), manganese (Mn), sulfur (S), and silicon (Si) are important in steelmaking and are also generally reliable elements for identification of possible groups of pipe, when estimated using filings removed from the pipe surface. The following table provides the filings analysis for C, Mn, S, and Si. For this station, features JT-51, JT-62.5, JT-127, and JT-138.5 had essentially similar compositions, but features JT-74.5 and JT-77.4 differed significantly in terms of Si, Mn, and S content.
-
-```{r station comp}
-
-## Join the station data -----------------------------------------------------
-station_comp <- eca_feature %>%
-  full_join(eca_comp, by = c("group", "feature")) %>%
-  full_join(eca_wt, by = c("group", "feature")) %>% 
-  full_join(eca_ndt, by = c("group", "feature")) %>% 
-  filter(group == "Rabbit Springs",
-        feature %in% c("JT-51", "JT-62.5", "JT-74.5", "JT-77.4", "JT-127", "JT-138.5")) %>% 
-  mutate(
-    "C (wt%, filings)" = format(round(c, 2), nsmall = 2),
-    "Mn (wt%, filings)" = format(round(mn, 2), nsmall = 2),
-    "S (wt%, filings)" = format(round(s, 3), nsmall = 3),
-    "Si (wt%, filings)" = format(round(si, 2), nsmall =2)
-    ) %>% 
-  select(
-    group,
-    feature,
-    "C (wt%, filings)",
-    "Mn (wt%, filings)",
-    "S (wt%, filings)",
-    "Si (wt%, filings)"
-  )
-
-knitr::kable(station_comp) %>% remove_column(1)
-
-
-```
-
-
-
-# Images 
-
-The microstructures that were analyzed are shown below. For the in-situ images, the circular viewing area was determined to be 465 μm in diameter. This scale is based on images taken by the vendor of a calibrated reference slide and is important for grain size estimation.
-
-![](RabbitSprings/_JT127_Field.jpg){height=250px} ![](RabbitSprings/_JT127_Replica.jpg){height=250px}
-<br />
-Feature JT-127 micrographs: in-situ (left) and replica (right). 
-<br />
-<br />
-![](RabbitSprings/_JT138.5_Field.jpg){height=250px} ![](RabbitSprings/_JT138.5_Replica.jpg){height=250px}<br />
-Feature JT-138.5 micrographs: in-situ (left) and replica (right).
-<br />
-<br />
-![](RabbitSprings/_JT51_Field.jpg){height=250px} ![](RabbitSprings/_JT51_Replica.jpg){height=250px}
-<br />
-Feature JT-51 micrographs: in-situ (left) and replica (right).
-<br />
-<br />
-![](RabbitSprings/_JT62.5_Field.jpg){height=250px} ![](RabbitSprings/_JT62.5_Replica.jpg){height=250px}
-<br />
-Feature JT-62.5 micrographs: in-situ (left) and replica (right).
-<br />
-<br />
-![](RabbitSprings/_JT74.5_Field.jpg){height=250px} ![](RabbitSprings/_JT74.5_Replica.jpg){height=250px}
-<br />
-Feature JT-74.5 micrographs: in-situ (left) and replica (right).
-<br />
-<br />
-![](RabbitSprings/_JT77.4_Field.jpg){height=250px} ![](RabbitSprings/_JT77.4_Replica.jpg){height=250px}
-<br />
-Feature JT-77.4 micrographs: in-situ (left) and replica (right).
-<br />
-<br />
-
-
-# Quantitative Evaluations  
-
-For the remainder of this analysis, features JT-51, JT-62.5, JT-127, and JT-138.5 were grouped together based on similarities in the microstructure as-well-as feature type, seam type, OD, WT, carbon, sulfur, manganese, and silicon content. The following table shows the results of the quantitative evaluations of grain size (ASTM) and dark phase for the samples. Per ASTM E112, the repeatability and reproducibility of comparison ratings for grain size are generally ±1 grain size number. The repeatability and reproducibility of the comparison ratings for dark phase are not yet known, but a reasonable estimate is ±20% of the value.
-
-```{r station_micro data table}
-
-station_micro_DT <- station_micro %>% 
-  mutate(
-    "dark phase (%)" = format(round(pct_dark_phase, 0), nsmall = 0),
-    "grain size (ASTM)" = format(round(astm_grain_size, 1), nsmall = 1),
-    "grain size (μm)" = format(round(mean_linear_intercept, 1), nsmall = 1)
-  ) %>% 
-  select(
-    group,
-    feature,
-    "dark phase (%)",
-    "grain size (ASTM)",
-    "grain size (μm)"
-  )
-
-knitr::kable(station_micro_DT) %>% remove_column(1)
-
-
-```
-
-
-# Correlations  
-
-Quantitative data from specific features have been compared to .... microstructural analysis team. The microstructural analysis team regularly performs two types of analysis for microstructures: grain size and percent dark phase (pearlite) estimation. These two types of analysis are important inputs to strength, grade, and vintage estimation procedures. Two methods are used for each analysis: counting and comparison methods. The counting and comparison methods for grain size are based on the ASTM E112 Jeffries planimetric method and comparison method, respectively. The counting method for dark phase is based on ASTM E562, and the comparison method for dark phase estimation was developed by PG&E.
-
-## GS, DP, and Vintage  
-```{r GS, DP, and Vintage, fig.height = 4, fig.width = 10}
+```{r GS DP and Vintage, fig.height=3, fig.width=8.5}
 
 plot1 <- ggplot() +
   geom_rect(
-    data = station_micro,
+    data = station_micro_plots,
     aes(
       xmin = gs_min,
       xmax = gs_max,
@@ -539,19 +508,22 @@ plot1 <- ggplot() +
     alpha = 0.2,
     show.legend = FALSE
   ) +
-  geom_point(data = ndt_ten_comp_micro, aes(astm_grain_size, year)) +
+  geom_point(data = eca_all_micro_complete, aes(astm_grain_size, year), alpha=0.4) +
   geom_vline(
-    data = station_micro,
+    data = station_micro_plots,
     aes(xintercept = astm_grain_size, col = feature),
     lty = 2,
     show.legend = FALSE
   ) +
   scale_y_continuous(breaks = seq(1940, 2020, by = 20)) +
-  scale_x_continuous(breaks = seq(8, 14, by = 1))
+  scale_x_continuous(breaks = seq(8, 14, by = 1))+
+  ylab("Year") + 
+  xlab("ASTM Grain Size")
+ 
 
 plot2 <- ggplot() +
   geom_rect(
-    data = station_micro,
+    data = station_micro_plots,
     aes(
       xmin = dp_min,
       xmax = dp_max,
@@ -562,24 +534,33 @@ plot2 <- ggplot() +
     alpha = 0.2,
     show.legend = FALSE
   ) +
-  geom_point(data = ndt_ten_comp_micro, aes(pct_dark_phase, year)) +
+  geom_point(data = eca_all_micro_complete, aes(pct_dark_phase, year), alpha=0.4) +
   geom_vline(
-    data = station_micro,
+    data = station_micro_plots,
     aes(xintercept = pct_dark_phase, col = feature),
     lty = 2
   ) +
-  scale_y_continuous(breaks = seq(1940, 2020, by = 20))
+  scale_y_continuous(breaks = seq(1940, 2020, by = 20))+
+  ylab("Year") + 
+  xlab("Dark Phase (%)")
 
 plot1 + plot2
 
 ```
 
-## GS, DP, and Charpy V Notch Upper Shelf Energy
-```{r GS, DP, and Charpy, fig.height = 4, fig.width = 10}
+# CVN Upper Shelf Energy Correlation  
+
+The Charpy V-Notch test is a dynamic mechanical test wherein a standard sample of steel plate or linepipe wall is fractured by a rapidly moving hammer. The measure of energy absorbed from this test, especially in the upper shelf region is useful for comparison with pipe burst pressures.
+
+The Rabbit Springs features, with grain sizes in the range of 9-12 appear to be in a transition region when it comes to Charpy V-Notch (CVN) upper shelf energy. Below ASTM 9.5, all steels in the validation set exhibited an upper shelf energy less than 65 ft-lbs. Above ASTM 11.5, all steels in the validation set exhibited an upper shelf energy of more than 100 ft-lbs. 
+
+The dark phase results also lead to the expectation that these steels could exhibit CVN upper shelf energies of 25-100 ft-lbs. Again, feature JT-77.4 appeared to exhibit a finer grain size and less dark phase, which could indicate higher toughness than the other features.
+
+```{r GS, DP, and Charpy, fig.height=3, fig.width=8.5}
 
 plot1 <- ggplot() +
   geom_rect(
-    data = station_micro,
+    data = station_micro_plots,
     aes(
       xmin = gs_min,
       xmax = gs_max,
@@ -590,17 +571,19 @@ plot1 <- ggplot() +
     alpha = 0.2,
     show.legend = FALSE
   ) +
-  geom_point(data = ndt_ten_comp_micro, aes(astm_grain_size, CVN_US_FS)) +
+  geom_point(data = eca_all_micro_complete, aes(astm_grain_size, CVN_US_FS), alpha=0.4) +
   geom_vline(
-    data = station_micro,
+    data = station_micro_plots,
     aes(xintercept = astm_grain_size, col = feature),
     lty = 2,
     show.legend = FALSE
-  ) 
+  ) +
+  ylab("CVN Upper Shelf (ft-lbs)") + 
+  xlab("ASTM Grain Size")
 
 plot2 <- ggplot() +
   geom_rect(
-    data = station_micro,
+    data = station_micro_plots,
     aes(
       xmin = dp_min,
       xmax = dp_max,
@@ -611,24 +594,31 @@ plot2 <- ggplot() +
     alpha = 0.2,
     show.legend = FALSE
   ) +
-  geom_point(data = ndt_ten_comp_micro, aes(pct_dark_phase, CVN_US_FS)) +
+  geom_point(data = eca_all_micro_complete, aes(pct_dark_phase, CVN_US_FS), alpha=0.4) +
   geom_vline(
-    data = station_micro,
+    data = station_micro_plots,
     aes(xintercept = pct_dark_phase, col = feature),
     lty = 2
-  ) 
+  ) +
+  ylab("CVN Upper Shelf (ft-lbs)") + 
+  xlab("Dark Phase (%)")
 
 plot1 + plot2
 
 ```
 
 
-## GS, DP, and Charpy V Notch Transition Temperature
-```{r GS, DP, and Charpy V Notch Transition Temperature, fig.height = 4, fig.width = 10}
+# CVN 85% Shear Appearance Transition Temperature  
+
+The CVN 85% shear appearance transition temperature (SATT) is a useful indicator of whether brittle or ductile fracture behavior can be expected in the field. Often the SATT is used to evaluate whether the steel is at or near the toughness expected from upper shelf behavior. Note, however, that the transition temperatures from CVN testing do not directly correspond to transition temperatures for slow crack growth in a line pipe. It is possible for linepipe to exhibit ductile behavior at temperatures 100-200 °F less than the CVN 85% SATT. A strong correlation between grain size and SATT has been observed as shown in the following figure. Fine grains (large ASTM numbers) result in low SATT, indicating ductile fracture over a wide temperature range. Large grains (small ASTM numbers) result in a high SATT, possibly increasing the risk of brittle fracture and failure at temperatures relevant to typical working temperatures. 
+
+The grain sizes for the Rabbit Spring features fall in about the middle of the apparently linear correlation with SATT. The dark phase plot does not add too much additional insight except to decrease the expectation of an extremely low SATT. Based on these plots, the SATT for the features could be in the range of about 20-150 °F. Again, feature JT-77.4 appeared to exhibit a finer grain size and less dark phase, which could be more likely to lead to ductile behavior at lower temperatures than the other features. These features are not likely to be on the extremely brittle end (high SATT), which would be expected if the grain size was less than ASTM 9.
+
+```{r GS DP and Charpy V Notch Transition Temperature, fig.height=3, fig.width=8.5}
 
 plot1 <- ggplot() +
   geom_rect(
-    data = station_micro,
+    data = station_micro_plots,
     aes(
       xmin = gs_min,
       xmax = gs_max,
@@ -639,33 +629,37 @@ plot1 <- ggplot() +
     alpha = 0.2,
     show.legend = FALSE
   ) +
-  geom_point(data = ndt_ten_comp_micro, aes(astm_grain_size, TT_FS_F)) +
+  geom_point(data = eca_all_micro_complete, aes(astm_grain_size, TT_FS_F), alpha=0.4) +
   geom_vline(
-    data = station_micro,
+    data = station_micro_plots,
     aes(xintercept = astm_grain_size, col = feature),
     lty = 2,
     show.legend = FALSE
-  ) 
+  ) +
+  ylab("CVN SATT (°F)") + 
+  xlab("ASTM Grain Size")
 
 plot2 <- ggplot() +
   geom_rect(
-    data = station_micro,
+    data = station_micro_plots,
     aes(
       xmin = dp_min,
       xmax = dp_max,
-      ymin = c(-140, -130, -140),
-      ymax = c(170, 180, 170),
+      ymin = c(-150, -140, -130),
+      ymax = c(160, 170, 180),
       fill = feature
     ),
     alpha = 0.2,
     show.legend = FALSE
   ) +
-  geom_point(data = ndt_ten_comp_micro, aes(pct_dark_phase, TT_FS_F)) +
+  geom_point(data = eca_all_micro_complete, aes(pct_dark_phase, TT_FS_F), alpha=0.4) +
   geom_vline(
-    data = station_micro,
+    data = station_micro_plots,
     aes(xintercept = pct_dark_phase, col = feature),
     lty = 2
-  ) 
+  ) +
+  ylab("CVN SATT (°F)") + 
+  xlab("Dark Phase (%)") 
 
 plot1 + plot2
 ```
@@ -687,27 +681,114 @@ ASTM E112 defines grain size number, G as $N_{AE}=2^{G-1}$ where $N_{AE}$ is the
 Dark phase was quantified using a comparison method developed by PG&E and Exponent. First, the amount of dark phase in several microstructures at several magnifications was quantified using image analysis and the ASTM E562 point counting method. Then, these images were incorporated into a tool built into a Microsoft Excel document for comparison with sample microstructures. The comparison microstructure with the amount of dark phase that most closely matches the sample is chosen at first. Then, interpolation is performed to increase the resolution for the amount of dark phase, depending on whether the sample appears to have more or less dark phase than the comparison micrograph.
 
 
-```{r GS, DP, and Grade, fig.width=6.5, fig.height=9}
+```{r GS, DP, and Vintage, fig.height=3, fig.width=8.5}
+
+
+# Appendix 2: Other Reference Plots
+
+# plot of year vs silicon and sulfur in appendix with the Rabbit Springs data overlaid
+
+# plot1 <- ggplot() +
+#   geom_point(data = eca_all, aes(si, year), alpha=0.4) +
+#   geom_vline(
+#     data = station_feature_wt_ndt,
+#     aes(xintercept = jitter(si, 10), col = feature),
+#     lty = 2,
+#     show.legend = FALSE
+#   )  +
+#   scale_y_continuous(breaks = seq(1940, 2020, by = 20)) 
+# 
+# plot2 <- ggplot() +
+#   geom_point(data = eca_all, aes(s, year), alpha=0.4) +
+#   geom_vline(
+#     data = station_feature_wt_ndt,
+#     aes(xintercept = jitter(s, 6), col = feature),
+#     lty = 2
+#   ) +
+#   scale_y_continuous(breaks = seq(1940, 2020, by = 20))
+# 
+# 
+# plot1 + plot2
+
+```
+
+
+```{r pearlite}
+
+# The amount of equilibrium pearlite (previously called "dark phase") can be predicted using the iron + carbide equilibrium phase diagram. Based on the well-known "lever rule", if the carbon content is known, then the equilibrium pearlite content, P (%), for an binary iron-carbon alloy should be:
+# 
+# $$P=(C - .022)/(C_E - .022)*100$$ where $C$ is the carbon content in wt% and $C_E$ represents the equilibrium eutectoid carbon concentration in wt%. When alloying elements such as Mn and Si are introduced, the equilibrium eutectod carbon concentration tends to shift, and can be estimated by the following expression relevant to the pipeline steels: $$C_E = 0.76 -0.075 * Mn - 0.1 * Si$$ where $Mn$ and $Si$ are the Mn and Si content in wt%. Based on these simple expressions, the expected equilibrium pearlite content is provided in the following table along with the metallographically estimated dark phase content. With equilibrium processing conditions, on average, the dark phase and equilibrium pearlite content would be expected to be similar.
+# 
+# station_comp_group1 <- station_feature_wt_ndt %>% 
+#   filter(group == "Rabbit Springs",
+#         feature %in% c("JT-51", "JT-62.5", "JT-127", "JT-138.5")) %>%
+#   summarize(c = mean(c),
+#             mn = mean(mn),
+#             si = mean(si)) %>% 
+#   mutate(feature = "JT-51/62.5/127/138.5",
+#          group = "Rabbit Springs")
+# 
+# station_comp_others <- station_feature_wt_ndt %>% 
+#   filter(feature %in% c("JT-74.5", "JT-77.4")) %>% 
+#   select(group, feature, c, mn, si)
+# 
+# station_comp_groupings <- bind_rows(station_comp_others, station_comp_group1)
+# 
+# station_comp_pearlite <- station_comp_groupings %>% 
+#   mutate(
+#     "Eq. Pearlite (%)" = (c-.022)/(0.76-0.075*mn-0.1*si-.022)*100
+#   ) %>% 
+#   full_join(station_micro, by = c("group", "feature")
+#   ) %>% 
+#   select(
+#     group,
+#     feature,
+#     c,
+#     mn,
+#     si,
+#     "Eq. Pearlite (%)",
+#     pct_dark_phase
+#   )
+# 
+# flextable(station_comp_pearlite[1:3,-1]) %>% 
+#   set_caption("This is the table caption.") %>% 
+#   set_formatter(c = function(x) sprintf("%.02f", x),
+#                 mn = function(x) sprintf("%.02f", x),
+#                 si = function(x) sprintf("%.02f", x),
+#                 'Eq. Pearlite (%)' = function(x) sprintf("%.00f", x),
+#                 'pct_dark_phase' = function(x) sprintf("%.00f", x)) %>% 
+#   set_header_labels(values = list(feature = 'Feature',
+#                                   c = "C (wt%)",
+#                                   mn = "Mn (wt%)",
+#                                   si = "Si (wt%)",
+#                                   pct_dark_phase = "Dark Phase (%)")) %>% 
+#   align(j = -1, align = "center", part = "all") %>% 
+#   autofit()
+
+```
+
+
+```{r GS, DP, and Grade, fig.width=8.5, fig.height=9}
 
 # Appendix 2: Other correlations 
 
 ## GS, DP, and Grade
 
-# plot1 <- ndt_ten_comp_micro %>% 
+# plot1 <- eca_all_micro_complete %>% 
 #   filter(!is.na(grade)) %>% 
 #   ggplot(aes(grade, astm_grain_size)) +
 #   geom_boxplot(fill="steelblue")+
 #   geom_hline(data = station_micro , aes(yintercept = astm_grain_size, col = feature), lty = 2)+
 #   coord_flip()
 # 
-# plot2 <- ndt_ten_comp_micro %>% 
+# plot2 <- eca_all_micro_complete %>% 
 #   filter(!is.na(grade))%>% 
 #   ggplot(aes(grade, mean_linear_intercept)) +
 #   geom_boxplot(fill="steelblue")+
 #     geom_hline(data = station_micro , aes(yintercept = mean_linear_intercept, col = feature), lty = 2)+
 #   coord_flip()
 # 
-# plot3 <- ndt_ten_comp_micro %>% 
+# plot3 <- eca_all_micro_complete %>% 
 #     filter(!is.na(grade))%>% 
 #   ggplot(aes(grade, pct_dark_phase)) +
 #   geom_boxplot(fill="steelblue")+
@@ -724,19 +805,19 @@ Dark phase was quantified using a comparison method developed by PG&E and Expone
 
 ## GS, DP, and Yield Strength 
 
-# plot1 <- ndt_ten_comp_micro %>%
+# plot1 <- eca_all_micro_complete %>%
 #   ggplot(aes(astm_grain_size, ten_ys)) +
 #   geom_point(color = "steelblue") +   
 #   geom_vline(data = station_micro, aes(xintercept = astm_grain_size, col = feature),lty = 2) +
 #   facet_grid( ~ sample_type)
 # 
-# plot2 <- ndt_ten_comp_micro %>%
+# plot2 <- eca_all_micro_complete %>%
 #   ggplot(aes(mean_linear_intercept, ten_ys)) +
 #   geom_point(color = "steelblue") + 
 #   geom_vline(data = station_micro, aes(xintercept = mean_linear_intercept, col = feature), lty = 2) + 
 #   facet_grid( ~ sample_type)
 # 
-# plot3 <- ndt_ten_comp_micro %>%
+# plot3 <- eca_all_micro_complete %>%
 #   ggplot(aes(pct_dark_phase, ten_ys)) +
 #   geom_point(color = "steelblue") +   
 #   geom_vline(data = station_micro, aes(xintercept = pct_dark_phase, col = feature), lty = 2) +   
@@ -751,17 +832,17 @@ Dark phase was quantified using a comparison method developed by PG&E and Expone
 ## GS, DP, and Ultimate Tensile Strength
 
 
-# plot1 <- ndt_ten_comp_micro %>% 
+# plot1 <- eca_all_micro_complete %>% 
 #   ggplot(aes(astm_grain_size, ten_uts)) +
 #   geom_point(color="steelblue")+   
 #   facet_grid( ~ sample_type)
 # 
-# plot2 <- ndt_ten_comp_micro %>% 
+# plot2 <- eca_all_micro_complete %>% 
 #   ggplot(aes(mean_linear_intercept, ten_uts)) +
 #   geom_point(color="steelblue")+   
 #   facet_grid( ~ sample_type)
 # 
-# plot3 <- ndt_ten_comp_micro %>% 
+# plot3 <- eca_all_micro_complete %>% 
 #   ggplot(aes(pct_dark_phase, ten_uts)) +
 #   geom_point(color="steelblue")+   
 #   facet_grid( ~ sample_type)
@@ -774,20 +855,49 @@ Dark phase was quantified using a comparison method developed by PG&E and Expone
 ## GS, DP, and Strain Hardening Exponent
 
 
-# plot1 <- ndt_ten_comp_micro %>% 
+# plot1 <- eca_all_micro_complete %>% 
 #   ggplot(aes(astm_grain_size, ten_n)) +
 #   geom_point(color="steelblue")+   
 # facet_grid( ~ sample_type)
 # 
-# plot2 <- ndt_ten_comp_micro %>% 
+# plot2 <- eca_all_micro_complete %>% 
 #   ggplot(aes(mean_linear_intercept, ten_n)) +
 #   geom_point(color="steelblue")+   
 # facet_grid( ~ sample_type)
 # 
-# plot3 <- ndt_ten_comp_micro %>% 
+# plot3 <- eca_all_micro_complete %>% 
 #   ggplot(aes(pct_dark_phase, ten_n)) +
 #   geom_point(color="steelblue")+   
 # facet_grid( ~ sample_type)
 # 
 # plot1 + plot3
 ```
+
+```{r kable code}
+# kable(station_comp_pearlite[1:3,], 
+#              align=c(rep('c', times = 7)),
+#              col.names = c("Group",
+#                            "Feature",
+#                            "C (wt%)",
+#                            "Mn (wt%)",
+#                            "Si (wt%)",
+#                            "Eq. Pearlite (%)",
+#                            "Dark Phase (%)"),
+#              digits= c(0,0,2,2,2,0,0))
+
+# knitr::kable(station_feature_wt_ndt, 
+#              align = c(rep('c', times=9)), 
+#              col.names = c("Group",
+#                            "Feature", 
+#                            "Type", 
+#                            "Seam Type", 
+#                            "Year", 
+#                            "OD (in)", 
+#                            "WT (in)", 
+#                            "IIT Yield Strength (ksi)", 
+#                            "IIT Tensile Strength (ksi)" ),
+#              digits = c(1,1,1,1,1,1,3,1,1))  %>% 
+#   remove_column(1)
+
+```
+
