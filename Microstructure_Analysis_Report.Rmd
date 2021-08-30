@@ -1,0 +1,1797 @@
+---
+title: "Microstructure Analysis (DRAFT)"
+author: "Nathan Switzner and Joel Anderson"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  html_document:
+    toc: TRUE
+    toc_float: TRUE
+    theme: journal
+    number_sections: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE)
+
+```
+
+```{r libraries and data}
+
+# load libraries ----------------------------------------------------------
+library("gridExtra")                        # Load gridExtra package
+library(janitor)
+library(patchwork)
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(patchwork)
+# library(DataCombine)
+library(tidymodels)
+# library(rstanarm)
+theme_set(theme_bw(16)) #set theme to save typing
+# data import ----------------------------------------
+MICRO <- read_excel("Microstructure_Data_Collection_Online_08.12.2021_S5CJ.xlsx",
+                    sheet = "Collection2") %>% 
+mutate(Sample_Type = str_replace(Sample_Type, "-", "_"),
+       Group_Feature = paste0(Group," ",Feature),
+       year = year(Evaluation_Date),
+       Path = str_remove(string = Path,pattern = ".jpg"),
+       Path = str_remove(string = Path, pattern = ".tif")) 
+
+```
+
+```{r custom plot function}
+tp_plot <- function(df, x, y) {
+  ggplot(df, aes(x={{x}}, y={{y}})) +
+    geom_point(alpha = 0.6,
+               col = 'midnightblue',
+               size = 2) +
+    geom_abline(col = 'grey50', 
+                lty = 3, 
+                lwd = 1.2) +
+    tune::coord_obs_pred() +
+    geom_smooth(method = "lm", se=F)+
+    theme_bw(16, "serif")
+}
+
+```
+
+This report is automatically generated based on the data collection file produced by Pacific Gas and Electric (PG&E) Facilities Integrity Management Program (FIMP) microstructural analysis team. The microstructural analysis team regularly performs two types of analysis for microstructures: grain size and percent dark phase (pearlite) estimation. These two types of analysis are important inputs to strength, grade, and vintage estimation procedures. Two methods are used for each analysis: counting and comparison methods. The counting and comparison methods for grain size are based on the ASTM E112 Jeffries planimetric method and comparison method, respectively. The counting method for dark phase is based on ASTM E562, and the comparison method for dark phase estimation was developed by PG&E.
+
+# Evaluator Metrics  
+
+```{r monthly metrics plot, fig.width = 8}
+
+MICRO %>%
+  filter(year(Evaluation_Date) == year(Sys.Date()) - 1) %>%
+  # mutate(month = month.abb(month(Evaluation_Date))) %>%
+  group_by(eval = Evaluator_LANID,
+           month_num = month(Evaluation_Date)) %>%
+  summarise(n = n()) %>%
+  mutate(cumusum = cumsum(n), 
+         month = month.abb[month_num],
+         month = factor(month, levels = month.abb)) %>%
+  ggplot(aes(month_num, cumusum, col = eval)) +
+  geom_step(lwd = 1.2) +
+  theme_bw(16, "serif") +
+  scale_x_continuous(breaks = 1:12) +
+  scale_color_viridis_d(option = "C") +
+  labs(
+    title = paste("Cumulative Evaluations by ID for", year(Sys.Date()) - 1),
+    x = "Month",
+    y = "Cumulative Count",
+    color="Evaluator"
+  )
+  
+MICRO %>%
+  filter(year == 2021) %>%
+  # mutate(month = month.abb(month(Evaluation_Date))) %>%
+  group_by(eval = Evaluator_LANID,
+           month = month(Evaluation_Date)) %>%
+  summarise(n = n()) %>%
+  mutate(cumusum = cumsum(n)) %>%
+  ggplot(aes(month, cumusum)) +
+  geom_step(lwd = 1.2, aes(col = eval), position = "dodge") +
+  theme_bw(16, "serif") +
+  scale_x_continuous(breaks = 1:12) +
+  scale_color_viridis_d(option = "C") +
+  labs(
+    title = paste("Cumulative Evaluations by ID for", year(Sys.Date())),
+    x = "Month",
+    y = "Cumulative Count",
+    color="Evaluator"
+  )
+
+```
+
+## Evaluator Metrics Table 
+This table can be sorted by any field by clicking on the arrows at the column head.
+
+```{r eval_table}
+
+MICRO %>%
+  group_by(
+    ID = Evaluator_LANID,
+    year = year(Evaluation_Date),
+    month_num = month(Evaluation_Date)
+  ) %>%
+  filter(year == year(Sys.Date())) %>%
+  # factor(month, levels = month.abb))
+  summarise(n = n()) %>%
+  mutate(#Cumulative = cumsum(n),
+    month = month.abb[month_num],
+    month = factor(month, levels = month.abb)) %>%
+  arrange(month) %>%
+  relocate(month, .before = n) %>%
+  pivot_wider(
+    names_from = month,
+    values_from = n,
+    id_cols = ID,
+    values_fn = sum
+  ) %>%
+  mutate(Total = sum(c_across(cols = everything()),
+                     na.rm = T)) %>%
+  # select(-month_num) %>%
+  DT::datatable()
+```
+  
+## Evaluator Performance vs Averages Plots  
+
+The plots below indicate how the evaluations by each individual evaluator differ from the average of all evaluations.
+
+Mean Linear Intercept Grain Size (MLI-GS) by the Counting Method:
+
+```{r individuals vs average mli by counting method, fig.cap= "Individual performance for MLI GS (\u03BCm) by counting method (skips included)"}
+MICRO_MLI_Avg_Count <- MICRO %>%
+  filter(Method == "Counting") %>%
+  group_by(Group_Feature) %>%
+  summarize(MLI_Avg_Count = mean(Mean_Linear_Intercept, na.rm = T))
+
+MICRO_MLI_Indiv_Count <- MICRO %>% 
+  filter(Method == "Counting") %>%
+  group_by(Group_Feature, Evaluator_LANID) %>%
+  summarize(MLI_Avg_Count_Indiv = mean(Mean_Linear_Intercept, na.rm = T)) 
+
+MICRO_MLI_Count <- full_join(MICRO_MLI_Avg_Count,MICRO_MLI_Indiv_Count) 
+
+MICRO_MLI_Count <- full_join(MICRO_MLI_Count, MICRO)
+
+MICRO_MLI_Count%>% 
+  ggplot(aes(MLI_Avg_Count, MLI_Avg_Count_Indiv)) +
+  geom_point(aes(color = Evaluation_Date)) +
+  labs(x = "Average MLI GS from all evaluators  (\u03BCm)",
+      y = "Individual evaluator MLI GS (\u03BCm)") +
+  theme_bw() +
+  geom_abline(lwd = .5,
+              lty = 3,
+              col = 'black') +
+  facet_wrap(~ Evaluator_LANID) +
+  coord_obs_pred()+
+  theme(plot.margin = margin(0.5,0.5,0.5,0.5,"cm"))
+
+```
+
+Mean Linear Intercept Grain Size (MLI-GS) by the Comparison Method:
+
+```{r individuals vs average mli by comparison method, fig.cap= "Individual performance for MLI GS (\u03BCm) by comparison method (skips included)"}
+MICRO_MLI_Avg_Comp <- MICRO %>%
+  filter(Method == "Comparison") %>%
+  group_by(Group_Feature) %>%
+  summarize(MLI_Avg_Count = mean(Mean_Linear_Intercept, na.rm = T))
+
+MICRO_MLI_Indiv_Comp <- MICRO %>% 
+  filter(Method == "Comparison") %>%
+  group_by(Group_Feature, Evaluator_LANID) %>%
+  summarize(MLI_Avg_Count_Indiv = mean(Mean_Linear_Intercept, na.rm = T)) 
+
+MICRO_MLI_Comp <- full_join(MICRO_MLI_Avg_Comp,MICRO_MLI_Indiv_Comp)
+
+MICRO_MLI_Comp <- full_join(MICRO_MLI_Comp, MICRO)
+
+MICRO_MLI_Comp%>% 
+  ggplot(aes(MLI_Avg_Count, MLI_Avg_Count_Indiv)) +
+  geom_point(alpha = 0.5,
+              show.legend = T) +
+  geom_point(aes(color = Evaluation_Date)) +
+  labs(x = "Average MLI GS from all evaluators  (\u03BCm)",
+      y = "Individual evaluator MLI GS (\u03BCm)") +
+  theme_bw() +
+  geom_abline(lwd = .5,
+              lty = 3,
+              col = 'black') +
+  facet_wrap(~ Evaluator_LANID) +
+  coord_obs_pred()+
+  theme(plot.margin = margin(0.5,0.5,0.5,0.5,"cm"))
+
+```
+
+Dark Phase (DP) by the Counting Method:
+
+```{r individuals vs average dp by counting method, fig.cap= "Individual performance for DP (%) by counting method (skips included)"}
+MICRO_DP_Avg_Count <- MICRO %>%
+  filter(Method == "Counting") %>%
+  group_by(Group_Feature) %>%
+  summarize(DP_Avg_Count = mean(Pct_Dark_Phase, na.rm = T))
+
+MICRO_DP_Indiv_Count <- MICRO %>% 
+  filter(Method == "Counting") %>%
+  group_by(Group_Feature, Evaluator_LANID) %>%
+  summarize(DP_Avg_Count_Indiv = mean(Pct_Dark_Phase, na.rm = T)) 
+
+MICRO_DP_Count <- full_join(MICRO_DP_Avg_Count,MICRO_DP_Indiv_Count) 
+
+MICRO_DP_Count <- full_join(MICRO_DP_Count, MICRO)
+
+MICRO_DP_Count%>% 
+  ggplot(aes(DP_Avg_Count, DP_Avg_Count_Indiv)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_point(aes(color = Evaluation_Date)) +
+  labs(x = "Average DP from all evaluators  (%)",
+      y = "Individual evaluator DP (%)") +
+  theme_bw() +
+  geom_abline(lwd = .5,
+              lty = 3,
+              col = 'black') +
+  facet_wrap(~ Evaluator_LANID) +
+  coord_obs_pred()+
+  theme(plot.margin = margin(0.5,0.5,0.5,0.5,"cm"))
+
+```
+
+Dark Phase (DP) by the Comparison Method:
+
+```{r individuals vs average dp by comparison method, fig.cap= "Individual performance for DP (%) by comparison method (skips included)"}
+MICRO_DP_Avg_Comp <- MICRO %>%
+  filter(Method == "Comparison") %>%
+  group_by(Group_Feature) %>%
+  summarize(DP_Avg_Comp = mean(Pct_Dark_Phase, na.rm = T))
+
+MICRO_DP_Indiv_Comp <- MICRO %>% 
+  filter(Method == "Comparison") %>%
+  group_by(Group_Feature, Evaluator_LANID) %>%
+  summarize(DP_Avg_Comp_Indiv = mean(Pct_Dark_Phase, na.rm = T)) 
+
+MICRO_DP_Comp <- full_join(MICRO_DP_Avg_Comp,MICRO_DP_Indiv_Comp) 
+
+MICRO_DP_Comp <- full_join(MICRO_DP_Comp, MICRO)
+
+MICRO_DP_Comp%>%  
+  ggplot(aes(DP_Avg_Comp, DP_Avg_Comp_Indiv)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_point(aes(color = Evaluation_Date)) +
+  labs(x = "Average DP from all evaluators  (%)",
+      y = "Individual evaluator DP (%)") +
+  theme_bw() +
+  geom_abline(lwd = .5,
+              lty = 3,
+              col = 'black') +
+  facet_wrap(~ Evaluator_LANID) +
+  coord_obs_pred()+
+  theme(plot.margin = margin(0.5,0.5,0.5,0.5,"cm"))
+
+```
+
+## Quality Control Skips and Reasons
+
+The purpose of this table is for evaluators to identify their common errors and self correct.
+
+```{r skiptable}
+
+SKIPTABLE = MICRO %>%
+  filter(Skip == "Skip") %>%
+  select(
+    Evaluator_LANID,
+    Evaluation_Date,
+    Path,
+    Method,
+    Pct_Dark_Phase,
+    Mean_Linear_Intercept,
+    Skip_Reason
+  ) %>%
+  rename(
+    Evaluator = Evaluator_LANID,
+    Date = Evaluation_Date,
+    DP_pct = Pct_Dark_Phase,
+    MLI_GS = Mean_Linear_Intercept
+  ) %>%
+  mutate(MLI_GS = round(MLI_GS, 1),
+         Date = ymd(Date)) %>%
+  arrange(Evaluator,
+          Date)
+
+DT::datatable(SKIPTABLE, filter = "top",
+              caption = "List of evaluation errors selected to skip")
+```
+
+## Quality Control Outliers
+
+The purpose of this table is to identify outliers to help evaluators identify their common errors and self correct.
+
+```{r outliers}
+
+# OUTLIERTABLE = MICRO_MLI_Indiv_Count %>%
+#   mutate(outlier = abs("MLI_Avg_Count" - "MLI_Avg_Count_Indiv") + 0.1 * "MLI_Avg_Count") %>% 
+#   mutate(
+#     MLI_GS = round(MLI_GS, 1),
+#          Date = ymd(Date)) %>%
+#   arrange(Evaluator_LANID,
+#           Date)
+# 
+# DT::datatable(SKIPTABLE, filter = "top",
+#               caption = "List of evaluation errors selected to skip")
+```
+
+# Evaluation Tracking to Build the Validation Dataset
+
+For each pipe or fitting (Feature) from the ATS-ARBH, Modesto Yard, and PRCI Houston groups, the following table identifies the number of evaluations that have been performed (Count) and the the median, mean, and standard deviation (StDev).
+
+## Evaluation Tracker by Feature  
+
+The purpose of this table is to review the data for the features that have already been evaluated and identify the features that require more evaluations. Some features may be missing from the list entirely, and should be assigned for evaluation.
+
+```{r}
+MICROTABLE_MLI <-  MICRO %>%
+  filter(Skip == "NoSkip") %>% 
+  filter(Analysis_Type == "Grain_Size") %>%
+  group_by(Group_Feature, Sample_Type) %>%
+  summarize(
+    MLI_Count = n(),
+    MLI_Median = round(median(Mean_Linear_Intercept, na.rm = T), 1),
+    MLI_Mean = round(mean(Mean_Linear_Intercept, na.rm = T), 1),
+    MLI_StDev = round(sd(Mean_Linear_Intercept, na.rm = T), 1))
+
+```
+
+```{r TableDP1}
+MICROTABLE_DP <-  MICRO %>% 
+  filter(Skip == "NoSkip") %>% 
+  filter(Analysis_Type == "Dark_Phase") %>% 
+  group_by(Group_Feature,Sample_Type) %>% 
+            summarize(
+            DP_Count = n(),
+            DP_Median = round(median(Pct_Dark_Phase,na.rm=T),1),
+            DP_Mean = round(mean(Pct_Dark_Phase,na.rm=T),1),
+            DP_StDev = round(sd(Pct_Dark_Phase,na.rm = T),1))
+
+```
+
+```{r}
+MICROTABLE <- left_join(MICROTABLE_MLI,MICROTABLE_DP,
+          by = c("Group_Feature", "Sample_Type"))
+
+DT::datatable(MICROTABLE,filter="top",
+              caption = "Percent dark phase summary table")
+```
+
+## Evaluation Tracker by File (Photo-micrograph)
+```{r filename_count}
+MICRO %>% 
+  group_by(Path) %>% 
+  summarise(n=n()) %>% 
+  arrange(n) %>% 
+  DT::datatable(filter = "top", 
+                caption = "Number of Evaluations by Filename")
+
+```
+
+
+# Grain Size (GS) by Mean Linear Intercept (MLI) Evaluations
+
+There are two dimensions used frequently for describing grain size, ASTM grain size (GS) and mean linear intercept (MLI) GS. MLI GS will be used in this report because it relates to an actual physical dimension in the microstructure (mean distance between grain intersections for random lines drawn on the microstructure) and is reported herein in units of micrometers (μm). The ASTM GS sometimes enables better comparison of the standard deviation from large grain sizes to small grain sizes. Thus we will provide here the formulae to convert between MLI and ASTM GS as desired.
+
+ASTM E112 defines grain size number, G as $N_{AE}=2^{G-1}$ where $N_{AE}$ is the number of grains per square inch at 100X magnification. To obtain the number per square millimeter at 1X, multiply by 15.50. For relating ASTM grain size number, G, to mean linear intercept, L, ASTM E112 defines G such that G=0 when L=320 μm. Thus, $G=10-2*LOG_2(L/10)$ and $L=320*2^{-G/2}$ for L in micrometers (μm).
+
+The data identified as erroneous (selected to "skip") through the quality control (QC) process has been eliminated from this section.  The following charts enable visualization of the data distribution. Interestingly, for grain sizes less than \~5 μm it appears that evaluators chose to rely the comparison method and avoid the counting methods.
+
+```{r GS1, fig.height=12, fig.width=10, fig.align='center', fig.cap = "ASTM GS evaluated for destructive cross-sections and replicas by counting and comparison methods."}
+
+plot_dest <- MICRO %>%
+  filter(Skip == "NoSkip",
+         Sample_Type == "Cross_section",
+         Analysis_Type == "Grain_Size") %>%
+  ggplot() +
+  geom_boxplot(aes(x = Group_Feature, 
+                   y = Mean_Linear_Intercept, 
+                   fill = Method),
+               alpha = 0.75) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 25)) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = expression("Mean linear intercept GS (" ~ mu ~ "m)")) +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = c(0.8, 0.075))
+
+plot_repl <- MICRO %>%
+  filter(Skip == "NoSkip",
+         Analysis_Type == "Grain_Size",
+         Sample_Type == "Replica") %>%
+  ggplot() +
+  geom_boxplot(aes(x = Group_Feature,
+                   y = Mean_Linear_Intercept,
+                   fill = Method),
+               alpha = 0.75) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 25)) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = expression("Mean linear intercept GS (" ~ mu ~ "m)")) +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = c(0.8, 0.05))
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot_dest,plot_repl,ncol = 2)
+
+```
+
+The purpose of these charts is qualitative identification and comparison of the features with small and large grains between the two analysis methods.
+
+```{r GS2, fig.height=12, fig.width=10, fig.align='center', fig.cap= "ASTM GS evaluated for destructive cross-sections and replicas by the counting and comparison methods (ascending sort)."}
+
+plot_dest <- MICRO %>%
+  filter(Skip == "NoSkip",
+         Analysis_Type == "Grain_Size",
+         Sample_Type == "Cross_section") %>%
+  mutate(Group_Feature = fct_reorder(Group_Feature,
+                            Mean_Linear_Intercept,
+                            .fun = 'mean')) %>%
+  ggplot() +
+  geom_boxplot(aes(x = Group_Feature,
+                   y = Mean_Linear_Intercept, fill = Method),
+               alpha = 0.75) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 25)) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = expression("Mean Linear Intercept GS (" ~ mu ~ "m)")) +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = c(0.8, 0.1))
+
+plot_repl <- MICRO %>%
+  filter(Skip == "NoSkip",
+         Analysis_Type == "Grain_Size",
+         Sample_Type == "Replica") %>%
+  
+  mutate(Group_Feature = fct_reorder(Group_Feature, Mean_Linear_Intercept, .fun = 'mean')) %>%
+  ggplot() +
+  geom_boxplot(
+    aes(x = Group_Feature,
+        y = Mean_Linear_Intercept,
+        fill = Method),
+    alpha = 0.75
+  ) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 25)) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = expression("Mean linear intercept GS (" ~ mu ~ "m)")) +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = c(0.8, 0.1))
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot_dest,plot_repl,ncol = 2)
+ 
+```
+
+# Dark Phase (DP) Evaluations
+
+The data identified as erroneous (selected to "skip") through the quality control (QC) process has been eliminated from this section. The purpose of the following charts is visualization of the data distribution. 
+
+```{r DP1, fig.height=12, fig.width=10, fig.align='center', fig.cap="DP (%) evaluated for destructive cross-sections and replicas by the counting and comparison methods"}
+
+plot_dest <- MICRO %>%
+  filter(Skip == "NoSkip",
+  Analysis_Type == "Dark_Phase",
+  Sample_Type == "Cross_section") %>%
+  ggplot() +
+  geom_boxplot(aes(x = Group_Feature,
+                   y = Pct_Dark_Phase,
+                   fill=Method),
+               alpha = 0.75) +
+  coord_flip()+
+  scale_y_continuous(limits = c(0, 60)) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = "Dark Phase (%)") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = c(0.8, 0.1))
+
+plot_repl <- MICRO %>%
+  filter(Skip == "NoSkip",
+         Analysis_Type == "Dark_Phase",
+         Sample_Type == "Replica") %>%
+  
+  ggplot() +
+  geom_boxplot(aes(x = Group_Feature,
+                   y = Pct_Dark_Phase,
+                   fill = Method),
+               alpha = 0.75) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 60)) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = "Dark Phase (%)") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = c(0.8, 0.1))
+
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot_dest,plot_repl,ncol = 2)
+
+```
+
+The purpose of these charts is qualitative identification and comparison of the features with a small or large amount of dark phase between the two analysis methods.
+
+```{r DP3, fig.height=12, fig.width=10, fig.align='center', fig.cap= "DP (%) evaluated for destructive cross-sections and replicas by the counting and comparison methods (ascending sort)"}
+
+plot_dest <- MICRO %>%
+  filter(Skip == "NoSkip",
+         Analysis_Type == "Dark_Phase",
+         Sample_Type == "Cross_section") %>%
+  mutate(Group_Feature = fct_reorder(Group_Feature,
+                            Pct_Dark_Phase,
+                            .fun = 'mean')) %>%
+  ggplot() +
+  geom_boxplot(mapping = aes(x = Group_Feature,
+                             y = Pct_Dark_Phase,
+                             fill = Method),
+               alpha = 0.75) +
+  coord_flip() +
+  # scale_y_continuous(limits = c(0, 60)) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = "Dark phase (%)") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = c(0.8, 0.1))
+
+plot_repl <- MICRO %>%
+  filter(Skip == "NoSkip",
+         Analysis_Type == "Dark_Phase",
+         Sample_Type == "Replica") %>%
+  mutate(Group_Feature = fct_reorder(Group_Feature,
+                            Pct_Dark_Phase,
+                            .fun = 'mean')) %>%
+  ggplot() +
+  geom_boxplot(
+    mapping = aes(x = Group_Feature,
+                  y = Pct_Dark_Phase,
+                  fill = Method),
+    alpha = 0.75
+  ) +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 60)) +
+  theme_bw() +
+  labs(x = "Pipe or Fitting",
+       y = "Dark phase (%)") +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = c(0.8, 0.1))
+
+grid.arrange(          
+  # Apply grid.arrange function
+  plot_dest,plot_repl,ncol = 2)
+
+```
+
+
+# Validation of Microstructure Evaulation Method: Comparison vs Counting
+
+Since we are using both comparison methods and counting methods, it is important to validate that the two methods provide similar results.
+
+## Grain Size
+
+```{r compare 1}
+
+compare1 <- MICRO %>%
+  group_by(Group_Feature, Method) %>%
+  summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
+  pivot_wider(names_from = Method, values_from = avg) %>%
+  ggplot(aes(Counting,
+             Comparison)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "counting",
+       y = "comparison") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+ labs(title = "Comparison vs counting for MLI GS (\u03BCm)", 
+       subtitle =  "Skips Included")+
+  coord_obs_pred()+
+  theme_bw(10, "calibri")
+
+compare2 <- MICRO %>%
+  filter(Skip == "NoSkip") %>%
+  group_by(Group_Feature, Method) %>%
+  summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
+  pivot_wider(names_from = Method, values_from = avg) %>%
+  ggplot(aes(Counting, Comparison)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "counting",
+       y = "comparison") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Comparison vs counting for MLI GS (\u03BCm)", 
+       subtitle =  "Skips Excluded")+
+  coord_obs_pred()+
+    theme_bw(10, "calibri")
+
+compare1 + compare2
+
+```
+
+## Dark Phase
+
+The comparison method for dark phase is a method developed by PG&E, therefore is validated here vs the ASTM E562 counting method.
+  
+```{r compare3}
+
+compare3 <- MICRO %>%
+  group_by(Group_Feature, Method) %>%
+  summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
+  pivot_wider(names_from = Method, values_from = avg) %>%
+  ggplot(aes(Counting, Comparison)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "counting",
+       y = "comparison") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Comparison vs Counting for DP (%)", 
+       subtitle = "Skips Included")+
+  coord_obs_pred()
+
+compare4 <- MICRO %>%
+  filter(Skip == "NoSkip") %>%
+  group_by(Group_Feature, Method) %>%
+  summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
+  pivot_wider(names_from = Method, values_from = avg) %>%
+  ggplot(aes(Counting, Comparison)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "counting",
+       y = "comparison") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Comparison vs Counting for DP (%)", 
+       subtitle = "Skips Excluded")+
+  coord_obs_pred()
+
+  compare3 + compare4
+  
+```
+
+
+# Validation of Sample Type: Replica vs Destructive Cross-Section
+
+Since we are targeting the use of non-destructive methods for integrity management purposes, it is important to validate that the data from evaulations using replicas of the surface microstructure are similar to the data from evaluations using laboratory cross-sections of the pipes.
+
+## Grain Size
+
+```{r compare5}
+
+compare5 <- MICRO %>%
+  group_by(Group_Feature, Sample_Type) %>%
+  summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
+  pivot_wider(names_from = Sample_Type, values_from = avg) %>%
+  ggplot(aes(Replica, Cross_section)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Replica",
+       y = "Cross-Section") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Destructive Cross-Section vs Replica",
+       subtitle =  "for MLI GS (\u03BCm) (Skips Included)") +
+  coord_obs_pred()
+
+```
+  
+```{r compare6}
+
+compare6 <- MICRO %>%
+  filter(Skip == "NoSkip") %>%
+  group_by(Group_Feature, Sample_Type) %>%
+  summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
+  pivot_wider(names_from = Sample_Type, values_from = avg) %>%
+  ggplot(aes(Replica, Cross_section)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Replica",
+       y = "Cross-Section") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Destructive Cross-Section vs Replica",
+       subtitle =  "for MLI GS (\u03BCm) (Skips Excluded)") +
+  coord_obs_pred()
+
+compare5 + compare6
+
+```
+  
+```{r compare7}
+
+compare7 <- MICRO %>%
+  group_by(Group_Feature, Sample_Type, Method) %>%
+  summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
+  pivot_wider(names_from = Sample_Type, values_from = avg) %>%
+  ggplot(aes(col = Method, Replica, Cross_section)) +
+  geom_point(alpha = 0.5,
+             show.legend = T) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Replica",
+       y = "Cross-Section") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Destructive Cross-Section vs Replica",
+       subtitle =  "for MLI GS (\u03BCm) (Skips Included)") +
+  coord_obs_pred() +
+  theme(legend.position = "bottom")
+
+```
+  
+```{r compare8}
+
+compare8 <- MICRO %>%
+  filter(Skip == "NoSkip") %>%
+  group_by(Group_Feature, Sample_Type, Method) %>%
+  summarize(avg = mean(Mean_Linear_Intercept, na.rm = T)) %>%
+  pivot_wider(names_from = Sample_Type, values_from = avg) %>%
+  ggplot(aes(col = Method, Replica, Cross_section)) +
+  geom_point(alpha = 0.5,
+             show.legend = T) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Replica",
+       y = "Cross-Section") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Destructive Cross-Section vs Replica",
+       subtitle =  "for MLI GS (\u03BCm) (Skips Excluded)") +
+  coord_obs_pred() +
+  theme(legend.position = "bottom")
+
+compare7 + compare8
+
+```
+  
+## Dark Phase
+
+```{r compare9 }
+
+compare9 <- MICRO %>%
+  group_by(Group_Feature, Sample_Type) %>%
+  summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
+  pivot_wider(names_from = Sample_Type, values_from = avg) %>%
+  ggplot(aes(Replica, Cross_section)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Replica",
+       y = "Cross-Section") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Destructive Cross-Section vs Replica",
+       subtitle =  "for DP (Skips Included)")+
+coord_obs_pred()
+
+```
+  
+```{r compare10}
+
+compare10 <- MICRO %>%
+  filter(Skip == "NoSkip") %>%
+  group_by(Group_Feature, Sample_Type) %>%
+  summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
+  pivot_wider(names_from = Sample_Type, values_from = avg) %>%
+  ggplot(aes(Replica, Cross_section)) +
+  geom_point(alpha = 0.5,
+             show.legend = F) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Replica",
+       y = "Cross-Section") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Destructive Cross-Section vs Replica",
+       subtitle =  "for DP (Skips Excluded)") +
+  coord_obs_pred()
+
+compare9 + compare10
+
+```
+  
+```{r compare11}
+
+compare11 <- MICRO %>%
+  group_by(Group_Feature, Sample_Type, Method) %>%
+  summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
+  pivot_wider(names_from = Sample_Type, values_from = avg) %>%
+  ggplot(aes(col = Method,
+             Replica,
+             Cross_section)) +
+  geom_point(alpha = 0.5,
+             show.legend = T) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Replica",
+       y = "Cross-Section") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Destructive Cross-Section vs Replica",
+       subtitle = "for DP (Skips Included)")+
+coord_obs_pred() +
+  theme(legend.position = "bottom")
+
+```
+  
+```{r compare12}
+
+compare12 <- MICRO %>%
+  filter(Skip == "NoSkip") %>%
+  group_by(Group_Feature, Sample_Type, Method) %>%
+  summarize(avg = mean(Pct_Dark_Phase, na.rm = T)) %>%
+  pivot_wider(names_from = Sample_Type, values_from = avg) %>%
+  ggplot(aes(col = Method,
+             Replica,
+             Cross_section)) +
+  geom_point(alpha = 0.5,
+             show.legend = T) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Replica",
+       y = "Cross-Section") +
+  theme_bw() +
+  geom_abline(lwd = 0.5,
+              lty = 3,
+              col = 'black') +
+  labs(title = "Destructive Cross-Section vs Replica",
+       subtitle = "for DP (Skips Excluded)") +
+  coord_obs_pred() +
+  theme(legend.position = "bottom")
+
+compare11 + compare12
+
+```
+
+# Correlations  
+```{r ECA info,warning=FALSE}
+# Composition ------------------------------------------------------------
+
+comp <-
+  read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
+             sheet = "Composition") %>%
+   janitor::clean_names() %>%
+  filter(skip==FALSE) %>%
+     mutate(across(.cols = c:ca, ~ ifelse(str_detect(string = .x, pattern = "<"),
+        as.numeric(str_remove(string =.x, pattern =  "<"))/ 4,
+    as.numeric(.x)))) %>% 
+  filter(
+   ni < .5 | is.na(ni),
+    cu < 1 | is.na(cu),
+    ti < 1 | is.na(ti),
+    cr < .3 | is.na(cr),
+    al < 1 | is.na(al),
+    c < 0.4 | c > 0.03 | is.na(c),
+    si < 0.35 | is.na(si),
+    mn < 3| is.na(mn),
+    mo < 0.1 | is.na(mo)
+  ) %>%
+  mutate(
+    c = ifelse(c > 0.4 | c < .03, NA, c),
+    mn = ifelse(mn > 2 | mn < .2, NA, mn),
+    p = ifelse(p > 0.16 | p < 0.001, NA, p),
+    s = ifelse(s > 0.08 | s < 0.001, NA, s),
+    si = ifelse(si > 0.5 | si < 0.005, NA, si),
+    nb = ifelse(nb > 0.15 | nb < 0.0001, NA, nb),
+    v = ifelse(v > 0.15 | v < 0.0001, NA, v),
+    ti = ifelse(ti > 0.15 | ti < 0.0001, NA, ti),
+    ni = ifelse(ni > 0.3 | ni < 0.0001, NA, ni),
+    cu = ifelse(cu > 0.5 | cu < 0.0001, NA, cu),
+    mo = ifelse(mo > 0.15 | mo < 0.0001, NA, mo),
+    cr = ifelse(cr > 0.3 | cr < 0.0001, NA, cr),
+    b = ifelse(b > 0.001 | b < 0.00001, NA, b),
+    ca = ifelse(ca > 0.01 | ca < 0.00001, NA, ca)
+  )  %>% 
+  group_by(group, feature) %>%
+  summarise(across(
+    .cols = c:ca,
+    .fns = mean,
+    na.rm = T
+  )) %>%
+  select(group,
+         feature,
+         al,
+        c,
+        cr,
+        cu,
+        mn,
+        mo,
+        nb,
+        ni,
+        p,
+        s,
+        si,
+        v)
+
+# Feature data -----------------------------------------------------------
+
+feature <-
+  read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
+             sheet = "Features") %>%
+  janitor::clean_names() %>%
+  select(
+    group,
+    feature_id,
+    feature_type,
+    grade,
+    od_inch,
+    seam_type,
+    recorded_nominal_wt_inch,
+    pg_e_install_year,
+    mfr_year
+  ) %>%
+  rename(
+    OD = od_inch,
+    wall = recorded_nominal_wt_inch,
+    feature = feature_id,
+    year = pg_e_install_year
+  ) %>%
+  mutate(
+    mfr_year = (str_sub(mfr_year, 1, end = 4)),
+    mfr_year = ifelse(mfr_year == "earl", 1952, mfr_year),
+    group = ifelse(group == "ARB Houston", "ATS-ARBH", group),
+    year = case_when(
+      str_detect(string = year, pattern = "/") ~ str_sub(year,-4),
+      group == "Modesto Yard" & feature == "Feature 6" ~ "NA",
+      group == "Modesto Yard" & feature == "Feature 8" ~ "NA",
+      group == "Modesto Yard" & feature == "Feature 15" ~ "NA",
+      group == "Modesto Yard" & feature == "Feature 16" ~ "NA",
+      group == "Modesto Yard" & feature == "Feature 17" ~ "NA",
+      group == "Modesto Yard" & feature == "Feature 18" ~ "NA",
+      group == "Modesto Yard" & feature == "Feature 19" ~ "NA",
+      is.na(year) ~ mfr_year,
+      TRUE ~ year
+    ),
+    year = as.numeric(year),
+    OD = as.numeric(OD),
+    wall = as.numeric(wall),
+    grade = case_when(
+      str_detect(grade, "35000") ~ "Grade B",
+      str_detect(grade, "B") ~ "Grade B",
+      str_detect(grade, "X42") ~ "X42",
+      str_detect(grade, "A-53") ~ "Grade B",
+      grade == "30000" ~ "Early",
+      grade == "40000" ~ "X42",
+      grade == "X-60" ~ "X60",
+      grade == "X-48" ~ "X46",
+      str_detect(grade, "48") ~ "X46",
+      str_detect(grade, "65") ~ "X65",
+      grade == "GR B" ~ "Grade B",
+      grade == "Unknown" ~ "NA",
+      grade == "N/A" ~ "NA",
+      grade == "B/Unknown" ~ "Grade B",
+      TRUE ~ grade
+    ),
+    grade = str_remove(grade, "API 5L "),
+    grade = str_remove(grade, "-"),
+    grade = ifelse(grade == "NA", NA, grade),
+    source = "ECA2"
+  ) %>%
+  filter(feature_type == "Pipe")
+
+# IIT data ----------------------------------------------------------------
+
+ndt <-
+ read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
+             sheet = "NDT") %>%
+  janitor::clean_names() %>%
+  rename(group = group_name) %>%
+  filter(
+    skip == FALSE,
+    group != "Calibration Blocks",
+    str_detect(
+      "Old",
+      negate = T,
+      vendor_test_area_label),
+      reader_method == "DPT",
+      vendor %in% c('ATS', 'TDW')
+    ) %>%
+      group_by(group, feature) %>%
+      summarise(
+        iitys_5 = mean(x0_5_percent_eul_ys_ksi, na.rm = T),
+        iituts = mean(uts_ksi, na.rm = T),
+        nsamples = n()
+      ) %>%
+      filter(nsamples >= 10
+      )
+
+
+# Tensile data ------------------------------------------------------------
+
+tensile <-
+read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
+             sheet = "Tensile") %>%
+  janitor::clean_names() %>%
+  filter(skip == FALSE ,
+         type != "Weld" ,
+         type != "GirthWeldStrip" ,
+         group != "Calibration Blocks") %>%
+  rename(ys5 = x0_5_percent_eul_ys_ksi,
+         uts = uts_ksi,
+         ten_n = n
+         ) %>%
+  group_by(group, feature) %>%
+  summarise(ten_ys = mean(ys5, na.rm = T),
+            ten_uts = mean(uts, na.rm = T),
+            ten_n = mean(ten_n, na.rm = T))
+
+# Wall Thickness -----------------------------------------------------
+
+ECA_WT <- read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
+                     sheet = "Wall Thickness")  %>%
+  clean_names() %>%
+  filter(str_detect(location_type, "AFG", negate = T)) %>%  
+  group_by(group, feature) %>%
+  summarize(wt_in = mean(measurement_in, na.rm = T)) %>%
+  select(group,
+         feature,
+           wt_in)
+#remove any wall thickness measurements after grind (AFG)
+
+## Charpy data ----------------------------------------------------------       
+
+ECA_CVN <- read_excel("MasterDB-SQL-2021-07-28 NS.xlsx",
+                         sheet = "Charpy")  %>%
+  clean_names() %>% 
+  full_join(ECA_WT, by= c("group", "feature")) %>% 
+  filter(str_detect(location, "Base")) %>% #removing weld tests
+  mutate(
+    SA_SS = ifelse(shear_area_percent==100, 0.99,shear_area_percent/ 100),
+    #calc subsize shear area with 0.99 to avoid singularities and rename
+    t_ss_mm = charpy_size_mm,
+    #rename subsize charpy thickness in mm
+    t_ss_in = t_ss_mm / 25.4,
+    #calc subsize charpy thickness in inches
+    sigA = (-29.3943) * (t_ss_mm / 10) ^ 2 + 72.9619 * (t_ss_mm / 10) +
+      6.2530,
+    #calc sigmoidal parameter A per API 579 table on page 9F-3
+    sigB = (76.0070) * (t_ss_mm / 10) ^ 3 + 
+      (-183.4809) * (t_ss_mm / 10) ^ 2 +
+      148.2843 * (t_ss_mm / 10) - 7.8121,
+    #calc sigmoidal parameter B per API 579 table on page 9F-3
+    TT_SS_F =  temperature_f - sigB * log(SA_SS / (1 - SA_SS)) + sigA,
+    #calc subsize transition temp
+    #previously a 0.99 was added at the end to correct
+    TT_FS_F = TT_SS_F + 66 * (wt_in ^ 0.55) * (t_ss_in ^ (-.7) - 0.394 ^ (-.7)),
+    #calc fullsize (0.394 in size) transition temp using the nominal wall thickness
+    CVN_SS = absorbed_energy_ft_lbs,
+    #rename subsize CVN
+    CVN_US_SS = CVN_SS / (0.9 * SA_SS + 0.1),
+    #calc subsize CVN upper shelf energy from subsize CVN and subsize shear area
+    CVN_US_FS = CVN_US_SS * 0.394 / t_ss_in
+    #calc fullsize CVN upper shelf energy
+  ) %>%
+  group_by(group, feature) %>%
+  summarize(
+    CVN_US_FS = mean(CVN_US_FS, na.rm = T),
+    TT_FS_F = mean(TT_FS_F, na.rm = T)
+  ) %>%
+  select("group", "feature", "CVN_US_FS", "TT_FS_F")
+#-------------------------------------------------------------------------
+micro <- MICRO %>%
+  rename(group = Group,
+         feature = Feature,
+         polygonal = `Polygonal ferrite grains that are relatively distinct and free of dots, lines or cloudy features.`) %>%
+  janitor::clean_names() %>%
+  group_by(group, 
+           feature,
+           sample_type
+           ) %>%
+  summarise(
+    astm_grain_size = mean(astm_grain_size, na.rm = T),
+    mean_linear_intercept = mean(mean_linear_intercept, na.rm = T),
+    pct_dark_phase = mean(pct_dark_phase, na.rm = T),
+    ) %>%
+  ungroup()
+
+## Join the data -----------------------------------------------------
+ndt_ten_comp <- ndt %>%
+  full_join(feature,
+            by = c("group", "feature")) %>%
+  full_join(comp,
+            by = c("group", "feature")) %>%
+  full_join(tensile,
+            by = c("group", "feature")) %>%
+  full_join(ECA_CVN, 
+            by = c("group", "feature")) %>% 
+  full_join(micro, 
+            by = c("group", "feature")) %>% 
+  ungroup() %>% 
+  distinct() %>% 
+  mutate(dt = OD/wall)
+
+ndt_ten_comp_GS <- as.data.frame(ndt_ten_comp[complete.cases(ndt_ten_comp[ , "astm_grain_size"]),])
+
+
+```
+
+
+```{r histo OD, fig.width=5.5}
+library(ggplot2)
+ggplot(ndt_ten_comp_GS, aes(x=OD)) +
+  geom_histogram(color="black", binwidth = 2 , fill="steelblue")
+
+```
+
+```{r histo wall, fig.width=5.5}
+library(ggplot2)
+ggplot(ndt_ten_comp_GS, aes(x=wall)) +
+  geom_histogram(color="black", binwidth = .02 , fill="steelblue")
+
+```
+
+```{r histo grade, fig.width=5.5}
+library(ggplot2)
+ggplot(ndt_ten_comp_GS, aes(x=grade)) +
+  geom_bar(color="black", fill="steelblue")
+
+```
+
+
+## GS, DP, and Vintage  
+```{r GS, DP, and Vintage, fig.height = 10, fig.width = 6.5}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(year, astm_grain_size)) +
+  geom_point(color="steelblue")+
+  facet_grid(~ sample_type)
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(year, mean_linear_intercept)) +
+  geom_point(color="steelblue")+
+  facet_grid(~ sample_type)
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(year, pct_dark_phase)) +
+  geom_point(color="steelblue")+
+  facet_grid(~ sample_type)
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,nrow = 3)
+
+```
+
+## GS, DP, and Grade
+```{r GS, DP, and Grade, fig.height = 10, fig.width = 6.5}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(grade, astm_grain_size)) +
+  geom_boxplot(fill="steelblue")+
+  coord_flip()
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(grade, mean_linear_intercept)) +
+  geom_boxplot(fill="steelblue")+
+coord_flip()
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(grade, pct_dark_phase)) +
+  geom_boxplot(fill="steelblue")+
+  coord_flip()
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,nrow = 3)
+
+```
+
+## GS, DP, and Outside Diameter to Wall Thickness Ratio  
+```{r GS, DP, and dt, fig.height = 10, fig.width = 6.5}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, dt)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, dt)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, dt)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,nrow = 3)
+```
+
+## GS, DP, and Carbon Content  
+```{r GS, DP, and Carbon Content, fig.height = 10, fig.width = 6.5}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, c)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, c)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, c)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,nrow = 3)
+
+```
+
+## GS, DP, and Manganese Content  
+```{r GS, DP, and Manganese Content, fig.height = 10, fig.width = 6.5}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, mn)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, mn)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, mn)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,nrow = 3)
+
+```
+
+## GS, DP, and Silicon Content  
+```{r GS, DP, and Silicon Content, fig.height = 10, fig.width = 6.5}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, si)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, si)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, si)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,nrow = 3)
+
+```
+
+## GS, DP, and Yield Strength  
+```{r GS, DP, and Yield Strength, fig.height = 10, fig.width = 6.5}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, ten_ys)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, ten_ys)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, ten_ys)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,nrow = 3)
+
+```
+
+## GS, DP, and Ultimate Tensile Strength
+```{r GS, DP, and Ultimate Tensile Strength, fig.height = 10, fig.width = 6.5}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, ten_uts)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, ten_uts)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, ten_uts)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,nrow = 3)
+
+```
+
+## GS, DP, and Strain Hardening Exponent
+```{r GS, DP, and Strain Hardening Exponent, fig.height = 10, fig.width = 6.5}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, ten_n)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, ten_n)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, ten_n)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,nrow = 3)
+
+```
+
+## GS, DP, and IIT Predicted Yield Strength  
+```{r GS, DP, and IIT Predicted Yield Strength, fig.height = 10, fig.width = 6.5}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, iitys_5)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, iitys_5)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, iitys_5)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,nrow = 3)
+```
+
+
+
+## GS, DP, and IIT Predicted Ultimate Tensile Strength  
+```{r GS, DP, and IIT Predicted Ultimate Tensile Strength, fig.height = 10, fig.width = 6.5}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, iituts)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, iituts)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, iituts)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,nrow = 3)
+```
+
+
+
+
+## GS, DP, and Charpy V Notch Upper Shelf Energy
+```{r GS, DP, and Charpy V Notch Upper Shelf Energy, fig.height = 10, fig.width = 6.5}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, CVN_US_FS)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)+
+  scale_x_log10()+
+  scale_y_log10()
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, CVN_US_FS)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)+
+  scale_x_log10()+
+  scale_y_log10()
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, CVN_US_FS)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)+
+  scale_y_log10()
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,nrow = 3)
+```
+
+
+## GS, DP, and Charpy V Notch Transition Temperature
+```{r GS, DP, and Charpy V Notch Transition Temperature, fig.height = 10, fig.width = 6.5}
+
+plot1 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(astm_grain_size, TT_FS_F)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot2 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(mean_linear_intercept, TT_FS_F)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+plot3 <- ndt_ten_comp_GS %>% 
+  ggplot(aes(pct_dark_phase, TT_FS_F)) +
+  geom_point(color="steelblue")+   facet_grid(~ sample_type)
+
+ grid.arrange(          
+  # Apply grid.arrange function
+  plot1,plot2,plot3,nrow = 3)
+```
+
+
+## CONSTRUCTION ZONE - IGNORE ALL DATA PAST THIS POINT - MLI plots  
+```{r mli plots}
+
+lm_model <-
+  linear_reg() %>%
+  set_mode("regression") %>%
+  set_engine("lm")
+
+complete <- ndt_ten_comp %>%
+  select(CVN_US_FS,
+         ten_ys,
+         iitys_5,
+         c,
+         mn,
+         s,
+         si,
+         p,
+         mean_linear_intercept,
+         astm_grain_size,
+         pct_dark_phase) %>%
+  mutate(sr_mli=sqrt(mean_linear_intercept)) %>% 
+  rename(ags = astm_grain_size,
+         pdp = pct_dark_phase,
+         mli = mean_linear_intercept) %>%
+  drop_na() 
+
+
+ys_rec <-
+  recipe(ten_ys ~ iitys_5+ c + mn + s + si + p + ags + pdp + mli,
+         data = complete) %>%
+  step_center(all_predictors()) %>%
+  # step_scale(all_predictors()) %>%
+  step_interact(terms = ~ c(mn:c, ags:pdp, c:si, si:mli)) %>%
+  prep() #retain data =TRUE is default
+
+ys_bake <- bake(ys_rec, new_data = NULL)
+
+# fit the model
+fitted_m <-  fit(lm_model,
+                 formula = ten_ys ~ iitys_5 + mn + c+si:mli ,
+                 data = ys_bake)
+
+
+fitted_mnc <- fit(lm_model,
+                  formula = ten_ys ~ iitys_5 + si + ags ,
+                  data = ys_bake)
+
+glance(fitted_mnc)
+summary(fitted_m$fit)
+
+glance(fitted_m)
+# fitted_iit$fit# fitted model object
+
+#extract coefficients
+tidy_iit <- tidy(fitted_mnc, conf.int=T) %>% 
+  mutate(model ="IIT") 
+
+#extract performance metrics
+# iit_glance <- glance(fitted_iit$fit) %>%
+#   mutate(model ="IIT") %>% 
+#   relocate(model)
+
+#attach the preidcted values to the original data
+ys_aug <- augment(fitted_mnc$fit,interval = "prediction") %>%
+  mutate(model="IIT")
+
+
+```
+ 
+```{r iit-regress, fig.cap="Regression Results"}
+# ys_aug %>%
+#   # pivot_longer(cols = c(.fitted_iit, .fitted_comp)) %>%
+#   ggplot(aes(y = ten_ys, x = .fitted)) +
+#   geom_jitter(width = 0.1, 
+#               height = 0.1,
+#               alpha = 0.65, 
+#               col = 'midnightblue') +
+#   coord_obs_pred() +
+#   geom_abline(lty = 2, col = 'grey50') +
+#   geom_smooth(method = "lm", se = T, col='orange') +
+#   scale_color_brewer(type = "div", palette = "Set1") +
+#   labs(title = "IIT Only Model Observed vs. Predicted",
+#        x = "Predicted Tensile (ksi)",
+#        y = "Observed Tensile (ksi)",caption = "ys ~ mn + c+ iit + grain_size")
+
+```
+
+```{r cvn_vs_mli}
+
+ndt_ten_comp %>% 
+  ggplot(aes(sqrt(mean_linear_intercept),CVN_US_FS))+
+  geom_point()+
+  geom_smooth(method = "lm", se=F)
+
+cvn_rec <-
+  recipe(CVN_US_FS ~ iitys_5 + c + mn + s + si + p + ags + pdp + mli,
+         data = complete) %>%
+  # step_scale(all_predictors()) %>%
+  step_interact(terms = ~ c(mn:c, pdp:ags, c:si, c:s, ags:mli, pdp:mli)) %>%
+  step_center(all_predictors()) %>%
+  prep() #retain data =TRUE is default
+
+cvn_bake <- bake(cvn_rec, new_data = NULL)
+
+
+mli_lm <- lm(CVN_US_FS ~ pdp, data = cvn_bake)
+
+mli_lm2 <- update(mli_lm, . ~ . + iitys_5)# no good
+mli_lm3 <- update(mli_lm, . ~ . + ags*mli) # significant
+mli_lm4 <- update(mli_lm, . ~ . + pdp:mli + c) # no good
+mli_lm5 <- update(mli_lm, . ~ . + pdp:mli + s)
+
+models <-list(mli_lm, mli_lm2, mli_lm3, mli_lm4, mli_lm5)
+
+modelsummary::modelsummary(models)
+
+
+# mli_lm6 <- complete %>%
+#   select(CVN_US_FS, pdp, ags, c,s, mli, method) %>%
+#   nest(c(-method)) %>%
+#   mutate(fit = map(data, ~lm(CVN_US_FS ~ sqrt(mli)+pdp/ags + c:s, data = .x)),
+#          glanced = map(fit, glance),
+#          tidied = map(fit, tidy)
+#          )
+
+
+
+
+# mli_lm6 %>%
+#   select(glanced) %>%
+#   unnest(glanced) %>%
+#   mutate(method=c("Comparison", "Counting")) %>%
+#   relocate(method) %>%
+#   select(method:sigma,-p.value, deviance) %>%
+#   mutate(across(.cols = c(2:5), ~ round(.x,2))) %>%
+#   flextable::flextable()
+
+```
+
+```{r plots of cvn model}
+mli_aug <- augment(mli_lm4, newdata=cvn_bake) %>% 
+  mutate(model="Carbon")
+
+mli_aug2 <- augment(mli_lm5, newdata=cvn_bake) %>% 
+  mutate(model = "Sulfur")
+
+mli_combo <- bind_rows(mli_aug, mli_aug2)
+
+ mli_combo %>% 
+  ggplot(aes(.fitted,CVN_US_FS))+
+  geom_point(aes(col=model), alpha=0.5)+
+  geom_abline(lty=2, col='grey50')+
+  coord_obs_pred()+
+  scale_color_brewer(type = "div",palette = "Set1")+
+   labs(title = "Observed CVN vs. Predicted",
+       x="Predicted CVN (ft-lb)",
+       y = "Full-Size US CVN (ft-lb)",
+       caption = "Model: CVN ~ MLI + MLI:DP + X")
+
+
+sulfur <- mli_aug2 %>% 
+  ggplot(aes(.fitted,CVN_US_FS))+
+  geom_point(col='red', alpha=0.5)+
+  geom_abline(lty=2, col='grey50')+
+  coord_obs_pred()+
+  scale_color_brewer(type = "div",palette = "Set1")+
+   labs(title = "Observed CVN vs. Predicted",
+       x="Predicted CVN (ft-lb)",
+       y = "Full-Size US CVN (ft-lb)",
+       caption = "Model: CVN ~ MLI + AGS:DP + S")
+
+carbon <- mli_aug %>% 
+  ggplot(aes(.fitted,CVN_US_FS))+
+  geom_point(col='blue', alpha=0.5)+
+  geom_abline(lty=2, col='grey50')+
+  coord_obs_pred()+
+  scale_color_brewer(type = "div",palette = "Set1")+
+   labs(title = "Observed CVN vs. Predicted",
+       x="Predicted CVN (ft-lb)",
+       y = "Full-Size US CVN (ft-lb)",
+       caption = "Model: CVN ~ MLI + AGS:DP + C")
+
+
+
+sulfur + carbon
+```
+
+```{r rlm}
+
+rlm_mli <- MASS::rlm(CVN_US_FS ~ pdp + pdp:mli + s, data = cvn_bake)
+rq_mli <- quantreg::rq(CVN_US_FS ~ mli + pdp/mli + c, data = cvn_bake)
+
+rlm_tidy <- tidy(rlm_mli, conf.int = T) %>% mutate(model = "RLM")
+rq_tidy <- tidy(rq_mli, conf.int = T) %>% mutate(model = "RQ")
+lm_tidy <- tidy(mli_lm5, conf.int = T) %>% mutate(model = "OLS")
+
+bind_rows(rlm_tidy, lm_tidy) 
+
+rlm_glance <- glance(rlm_mli ) %>% mutate(model="rlm")
+rq_glance <- glance(rq_mli) %>% mutate(model="rq")
+lm_glance <- glance(mli_lm4) %>% mutate(model = "lm")
+
+rlm_glance
+lm_glance
+
+# bind_rows(rlm_glance,lm_glance) 
+
+rlm_aug <- augment(rlm_mli,
+                   data = cvn_bake,
+                   interval = "confidence") %>%
+  mutate( model ="RLM")
+
+rq_aug <- augment(rq_mli,
+                   data = cvn_bake,
+                   interval = "confidence") %>%
+  mutate(method = complete$method, model ="RQ")
+
+# mli_pls <- plsr(
+#   CVN_US_FS ~ mli + pdp * ags + c,
+#   data = cvn_bake,
+#   scale = TRUE,
+#   validation = "CV"
+# )
+
+# pcr_pred <- predict(mli_pls, ncomp = 2)
+
+# pls_aug <- cbind(complete, pcr_pred) %>%
+#   rename(.fitted = 'CVN_US_FS.2 comps') %>%
+#   mutate(model = "PLS")
+
+rlm_aug %>% 
+  bind_rows(mli_aug) %>% 
+  ggplot(aes(.fitted, CVN_US_FS))+
+  geom_point(aes(col= model))+
+  # geom_line(aes(y=.fitted, col=model))+
+  geom_abline(col='grey50', lty=2)+
+  coord_obs_pred()+
+  scale_color_brewer(palette = "Set1", type = "div")+
+  labs(title = "Comparison of Regression Models",
+       x="Predicted (ft-lbs)",
+       y = "Full-Size CVN US (ft-lbs)",
+       caption = "CVN ~ MLI + PDP:MLI + S")
+
+```
+
+```{r histo_residuals}
+rlm_aug %>% 
+  bind_rows(mli_aug) %>% 
+  ggplot(aes(.resid))+
+  geom_density(aes(fill=model), alpha=0.5)+
+  scale_fill_brewer(type = "div",palette = "Set1")
+
+```
+
+
+```{r grain_size}
+# 
+# gs_lm <- lm(CVN_US_FS ~ astm_grain_size,data = ndt_ten_comp) #signficant
+# 
+# gs_lm2 <- update(gs_lm, .~. +sqrt(mean_linear_intercept)) #no good
+# 
+# gs_lm3 <- update(gs_lm, .~. + s +pct_dark_phase) #no good, mn doesn't change
+# summary(gs_lm3)
+# 
+# gs_lm4 <- update(gs_lm, .~. + c) # good, carbon p-value =.02 
+# 
+# glance(gs_lm3)
+# glance(gs_lm4)
+# 
+# summary(gs_lm4)
+# 
+# 
+# # gs_aug <- augment(gs_lm4, complete)
+# 
+# 
+# options(mc.cores = parallel::detectCores())
+# 
+# stan_gs <- stan_glm(CVN_US_FS ~ ags + pdp, data = cvn_bake)
+# stan_gs2 <- stan_glm(CVN_US_FS ~ pdp + c, data = cvn_bake)
+# stan_gs3 <- stan_glm(CVN_US_FS ~ pdp:mli+ pdp + c, data = cvn_bake)
+# stan_gs4 <- stan_glm(CVN_US_FS ~ pdp:mli + pdp +s, data = cvn_bake)
+# stan_gs5 <- stan_glm(CVN_US_FS ~ ags:pdp + pdp + si, data = cvn_bake)
+# 
+# print(stan_gs)
+# print(stan_gs2)
+# print(stan_gs3)
+# print(stan_gs4)
+# print(stan_gs5)
+# summary(stan_gs4)
+# 
+# plot(stan_gs3, plotfun = "areas", prob=0.95, pars = "c")+
+#   labs(title = "Uncertainty for Carbon Coefficient")
+# 
+# bayesplot::mcmc_areas_ridges(stan_gs4)+labs(title = "Main Title")
+
+
+```
+
+
+```{r}
+# .fitted <- predict(stan_gs4,newdata = cvn_bake)
+# 
+# stan_aug <- bind_cols(cvn_bake, .fitted =.fitted) %>% mutate(model="Stan")
+# 
+# 
+# stan_aug %>% 
+#   bind_rows(rlm_aug) %>% 
+#   ggplot(aes(.fitted, CVN_US_FS))+
+#   geom_point(aes(col=model))+
+#   geom_abline(lty=2, col='grey50')+
+#   coord_obs_pred()+
+#   labs(title = "Observed CVN vs. Predicted",
+#        x="Predicted CVN (ft-lb)",
+#        y = "Full-Size US CVN (ft-lb)",
+#        caption = "Model: CVN ~ DP + AGS:DP")
+```
+
+
+```{r interaction plot}
+# complete %>% 
+#   pivot_longer(-CVN_US_FS) %>% 
+#   ggplot(aes(value, CVN_US_FS))+
+#   geom_point(aes(col=Group_Feature), show.legend = F)+
+#   facet_wrap( ~ Group_Feature, scales = "free_x")+
+#   geom_smooth(method = "lm", se=F)
+
+```
+
+
+```{r plot_grain_size}
+# gs_aug %>% 
+#    ggplot(aes(.fitted,CVN_US_FS))+
+#   geom_point(col='orangered')+
+#   geom_abline(lty=2, col='grey50')+
+#   coord_obs_pred()+
+#   annotate("text", x= 75, y = 250,label=expression(R^2 ~ "= 0.57"), size=5)+
+#   labs(title = "Observed CVN vs. Predicted",
+#        caption = "Model: CVN ~ ASTM_GS + C",
+#        x="Predicted")
+
+```
+

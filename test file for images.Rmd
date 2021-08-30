@@ -1,0 +1,49 @@
+---
+title: "Microstructure Report for Rabbit Springs (Draft)"
+author: "Nathan Switzner and Joel Anderson"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  html_document:
+    toc: TRUE
+    toc_float: TRUE
+    theme: journal
+    number_sections: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE)
+```
+
+# Images 
+
+The microstructures that were analyzed are shown below. For the in-situ images, the circular viewing area was determined to be 465 μm in diameter. This scale is based on images taken by the vendor of a calibrated reference slide and is important for grain size estimation.
+
+![](RabbitSprings/_JT127_Field.jpg){height=300px} ![](RabbitSprings/_JT127_Replica.jpg){height=300px}
+<br />
+Feature JT-127 micrographs: in-situ (left) and replica (right). 
+<br />
+<br />
+![](RabbitSprings/_JT138.5_Field.jpg){height=300px} ![](RabbitSprings/_JT138.5_Replica.jpg){height=300px}<br />
+Feature JT-138.5 micrographs: in-situ (left) and replica (right).
+<br />
+<br />
+![](RabbitSprings/_JT51_Field.jpg){height=300px} ![](RabbitSprings/_JT51_Replica.jpg){height=300px}
+<br />
+Feature JT-51 micrographs: in-situ (left) and replica (right).
+<br />
+<br />
+![](RabbitSprings/_JT62.5_Field.jpg){height=300px} ![](RabbitSprings/_JT62.5_Replica.jpg){height=300px}
+<br />
+Feature JT-62.5 micrographs: in-situ (left) and replica (right).
+<br />
+<br />
+![](RabbitSprings/_JT74.5_Field.jpg){height=300px} ![](RabbitSprings/_JT74.5_Replica.jpg){height=300px}
+<br />
+Feature JT-74.5 micrographs: in-situ (left) and replica (right).
+<br />
+<br />
+![](RabbitSprings/_JT77.4_Field.jpg){height=300px} ![](RabbitSprings/_JT77.4_Replica.jpg){height=300px}
+<br />
+Feature JT-77.4 micrographs: in-situ (left) and replica (right).
+<br />
+<br />
