@@ -311,11 +311,11 @@ eca_all_micro_complete <- as.data.frame(eca_all[complete.cases(eca_all[ , "astm_
 
 ```
 
-# Exective Summary  
+# Executive Summary  
 
 RSI-Pipeline Solutions was requested by Pacific Gas and Electric's (PG&E) Facilities Integrity Management Program (FIMP) to analyze images from six microstructural replicas (one per feature) from the Rabbit Springs facility. The objective was to quantify and characterize the microstructures to determine whether they were consistent with the reported vintage. Secondly, the microstructures were used to qualitatively assess the expected feature toughness properties.
 
-Firstly, the feature microstructures did not appear inconsistent with expectations for the reported vintages of 1980 and 1991. Secondly, based on the assessments of grain size and dark phase, the upper shelf energy and ductile to brittle transition temperature appeared moderate (likely to be neither extremely tough nor extremely brittle).
+Firstly, the feature microstructures did not appear inconsistent with expectations for the reported vintages of 1980 and 1991. Secondly, based on the assessments of grain size and dark phase, the upper shelf absorbed energy and ductile to brittle transition temperature appeared moderate (likely to be neither extremely tough nor extremely brittle).
 
 # Feature Information   
 
@@ -353,7 +353,7 @@ flextable(station_feature_wt_ndt[1:6,-1]) %>%
   autofit()
 ```
 
-# Compositional Data from Filings for Grouping   
+# Compositional Data from Filings
 
 The compositional elements, carbon (C), manganese (Mn), sulfur (S), and silicon (Si) are important in steelmaking and are also generally reliable elements for identification of possible groups of pipe, when estimated using filings removed from the pipe surface. The following table provides the filings analysis for C, Mn, S, and Si. For this station, features JT-51, JT-62.5, JT-127, and JT-138.5 had essentially similar compositions, but features JT-74.5 and JT-77.4 differed significantly in terms of Si, Mn, and S content.
 
@@ -392,7 +392,7 @@ flextable(station_feature_wt_ndt[1:6,-1]) %>%
 
 The microstructures that were analyzed are shown below. Both an in-situ image and an image taken in with a laboratory microscope of a field replica are shown. Typically the in-situ images are not used for quantitative evaluation. However, due to the use of silicone "Repliset" replication media, the replicates did not adequately replicate the details of the grain boundaries and dark phase. The poor resolution and lack of important features made the quantitative evaluation difficult. 
 
-For the in-situ images, the circular viewing area was determined to be 465 μm in diameter. This scale is based on images taken by the vendor of a calibrated reference slide and is important for grain size estimation. The replica images had a printed scale bar, which was useful for grain size estimation, however the replica images did not have distinct grain boundries due to the use of silicone replication medium.
+For the in-situ images, the circular viewing area was determined to be 465 μm in diameter. This scale is based on images taken by the vendor of a calibrated reference slide and is important for grain size estimation. The replica images had a printed scale bar, which was useful for grain size estimation, however the replica images did not have distinct grain boundaries due to the use of silicone replication medium.
 
 All images apparently exhibit a light phase and a dark phase, which indicate ferrite and pearlite constituents, respectively. For features JT-127, JT-138.5, JT-51, and JT-62.5, the pearlite appears somewhat unclear or degenerated. There may be a number of reasons for the lack of clarity, but one possibility is a long hold time at a temperature below 700 °C (~1300 °F), which allows redistribution of the carbon. Decarburization of the surface is another possibility. Features JT-74.5 and JT-77.4 exhibited more clarity of the grain boundaries and dark phase (pearlite constituent). Visually, the microstructures for all six features meet expectations for the surface microstructure of hot rolled or normalized steel linepipe.
 
@@ -417,7 +417,7 @@ Feature JT-77.4 micrographs: in-situ (left) and replica (right).
   
 # Quantitative Evaluations  
 
-For the remainder of this analysis, features JT-51, JT-62.5, JT-127, and JT-138.5 were grouped together based on similarities in the microstructure as-well-as feature type, seam type, OD, WT, carbon, sulfur, manganese, and silicon content. Due to the use of silicone "Repliset" replication media, the replicates did not adequately replicate the details of the grain boundaries and dark phase. The poor resolution and lack of important features made the quantitative evaluation difficult. The quantitative results should be viewed as estimates. Quantification was performed by one subject matter expert using the ASTM E112 comparison method for grain size estimation and the PG&E/RSI-PS developed comparison method for dark phase estimation. The in-situ images were used for quantification, and the replica images were used for reference.
+For the remainder of this analysis, features JT-51, JT-62.5, JT-127, and JT-138.5 were grouped together based on similarities in the microstructure as-well-as feature type, seam type, OD, WT, carbon, sulfur, manganese, and silicon content. Due to the use of silicone "Repliset" replication media, the replicates did not adequately replicate the details of the grain boundaries and dark phase. The poor resolution and lack of important features made the quantitative evaluation difficult. The quantitative results should be viewed as estimates. Quantification was performed by one subject matter expert using the ASTM E112 comparison method for grain size estimation and the PG&E/RSI-PS developed comparison method for dark phase estimation, which are described in detail in Appendix 1. The in-situ images were used for quantification, and the replica images were used for reference.
 
 The results of the quantitative evaluations of grain size (ASTM) and dark phase (%) for the features are provided in Table 3. Per ASTM E112, the repeatability and reproducibility of comparison ratings for grain size are generally ±1 grain size number. The repeatability and reproducibility of the comparison ratings for dark phase are not yet known, but a reasonable estimate is ±20% of the value.
 
@@ -478,11 +478,11 @@ flextable(station_micro_group[1:3,-1]) %>%
 
 # Vintage Correlation  
 
-The microstructure evaluation results for the features from Rabbit Springs were overlaid with the trends identified from the validation data set as shown in the following plot. The grayscale points represent the data from the features from the validation dataset. The shaded regions represent the expected range of grain size and dark phase from the station features, which the vertical dotted line indicating the nominal value. 
+The microstructure evaluation results for the features from Rabbit Springs were overlaid with the trends identified from the validation data set as shown in the following plot. The grayscale points represent the data from the features from the validation dataset. The shaded regions represent the expected range of grain size and dark phase from the station features with the vertical dotted line indicating the nominal value. 
 
 The validation dataset includes quantitative evaluations of grain size and dark phase percent by more than five trained evaluators. There were typically one to two images evaluated per feature. Two methods were used for each grain size analysis, counting and comparison methods. The counting and comparison methods for grain size are based on the ASTM E112 Jeffries planimetric method and comparison method, respectively. Two methods were also used for each dark phase analysis, counting and comparison methods. The counting method for dark phase estimation is based on ASTM E562, and the comparison method for dark phase estimation was developed by PG&E.
 
-Most of the features exhibited a grain size in the range of ~9.5-10.5, which can be observed for steels of all vintages. Feature JT-77.4 appeared to exhibit a finer grain size, which could indicate that it is more modern than the other features. The amount of dark phase in the features from Rabbit Springs apparently could be exhibited by line pipe for a variety of vintages from ~1930 or 1940 to present day, depending on the grade. 
+The features exhibited a grain size in the range of 9-12, which can be observed for steels of a wide range of vintages. Feature JT-77.4 appeared to exhibit a finer grain size, which could indicate that it is more modern than the other features. The amount of dark phase in the features from Rabbit Springs apparently could be exhibited by line pipe for a variety of vintages from ~1930 to present day, depending on the grade. 
 
 ```{r addition of gs and dp min and max for the plot rectangles}
 station_micro_plots <- station_micro_group %>% 
@@ -550,9 +550,9 @@ plot1 + plot2
 
 # CVN Upper Shelf Energy Correlation  
 
-The Charpy V-Notch test is a dynamic mechanical test wherein a standard sample of steel plate or linepipe wall is fractured by a rapidly moving hammer. The measure of energy absorbed from this test, especially in the upper shelf region is useful for comparison with pipe burst pressures.
+The Charpy V-Notch (CVN) test is a dynamic mechanical test wherein a standard notched sample of steel plate or linepipe wall is fractured by a rapidly moving hammer. The measure of energy absorbed from this test, especially in the upper shelf region is useful for comparison with pipe burst pressures.
 
-The Rabbit Springs features, with grain sizes in the range of 9-12 appear to be in a transition region when it comes to Charpy V-Notch (CVN) upper shelf energy. Below ASTM 9.5, all steels in the validation set exhibited an upper shelf energy less than 65 ft-lbs. Above ASTM 11.5, all steels in the validation set exhibited an upper shelf energy of more than 100 ft-lbs. 
+The Rabbit Springs features, with grain sizes in the range of 9-12 appear to be in a transition region when it comes to CVN upper shelf absorbed energy. Below ASTM 9.5, all steels in the validation set exhibited an upper shelf energy less than 65 ft-lbs. Above ASTM 11.5, all steels in the validation set exhibited an upper shelf energy of more than 100 ft-lbs. 
 
 The dark phase results also lead to the expectation that these steels could exhibit CVN upper shelf energies of 25-100 ft-lbs. Again, feature JT-77.4 appeared to exhibit a finer grain size and less dark phase, which could indicate higher toughness than the other features.
 
@@ -608,11 +608,11 @@ plot1 + plot2
 ```
 
 
-# CVN 85% Shear Appearance Transition Temperature  
+# CVN Transition Temperature Correlation  
 
 The CVN 85% shear appearance transition temperature (SATT) is a useful indicator of whether brittle or ductile fracture behavior can be expected in the field. Often the SATT is used to evaluate whether the steel is at or near the toughness expected from upper shelf behavior. Note, however, that the transition temperatures from CVN testing do not directly correspond to transition temperatures for slow crack growth in a line pipe. It is possible for linepipe to exhibit ductile behavior at temperatures 100-200 °F less than the CVN 85% SATT. A strong correlation between grain size and SATT has been observed as shown in the following figure. Fine grains (large ASTM numbers) result in low SATT, indicating ductile fracture over a wide temperature range. Large grains (small ASTM numbers) result in a high SATT, possibly increasing the risk of brittle fracture and failure at temperatures relevant to typical working temperatures. 
 
-The grain sizes for the Rabbit Spring features fall in about the middle of the apparently linear correlation with SATT. The dark phase plot does not add too much additional insight except to decrease the expectation of an extremely low SATT. Based on these plots, the SATT for the features could be in the range of about 20-150 °F. Again, feature JT-77.4 appeared to exhibit a finer grain size and less dark phase, which could be more likely to lead to ductile behavior at lower temperatures than the other features. These features are not likely to be on the extremely brittle end (high SATT), which would be expected if the grain size was less than ASTM 9.
+The grain sizes for the Rabbit Spring features fall in about the middle of the apparently linear correlation with SATT. The dark phase plot does not add too much additional insight except to decrease the expectation of an extremely low SATT. Based on these plots, the SATT for the features could be in the range of about 20-150 °F. Again, feature JT-77.4 appeared to exhibit a finer grain size and less dark phase, which could be more likely to lead to ductile behavior at lower temperatures than the other features. These features are not likely to be on the extremely brittle end (high SATT), which would be more likely if the grain size was less than ASTM 9.
 
 ```{r GS DP and Charpy V Notch Transition Temperature, fig.height=3, fig.width=8.5}
 
@@ -666,17 +666,17 @@ plot1 + plot2
 
 # Appendix 1: Quantitative Evaluation Methods 
 
-## Grain Size (GS) by Mean Linear Intercept (MLI) 
+## Grain Size  
 
 Grain size was quantified using the ASTM E112 comparison method using a tool built into a Microsoft Excel document. In this method the sample grain structure was compared to a series of images of known grain size, and the image with grain size most closely matching the ferrite (light phase) grain size of the sample was selected. Per ASTM the repeatability and reproducibility of comparison chart ratings are generally ±1 grain size number. The comparison method is a rapid technique, requiring only about one minute per sample.
 
 Selected images may also be quantified using the ASTM E112 Jeffries planimetric method, which is referred to herein as the "counting" method. In this method the number of grains in a known area are counted. The number of grains per unit area, NA , is used to determine the ASTM grain size number, G. Per ASTM, the precision of the method is about ±0.25 ASTM grain size units, and the repeatability and reproducibility are less than ±0.5 grain size units. The counting method is slower than the comparison method, requiring about 5-10 minutes depending on the microstructure and evaluator skill. Typically, for a 400X or 500X image, the counting method becomes quite difficult for grain sizes less than \~5 μm.
 
-There are two dimensions used frequently for describing grain size, ASTM grain size (GS) and mean linear intercept (MLI) GS. The advantage of MLI GS is that it relates to a physical dimension in the microstructure (mean distance between grain intersections for random lines drawn on the 2-dimensional cross-section of the microstructure) and is reported herein in units of micrometers (μm). On the other hand, the ASTM GS sometimes enables better comparison of the standard deviation from large grain sizes to small grain sizes. Thus we will provide here the formulae to convert between MLI and ASTM GS as desired.
+There are two dimensions used frequently for describing grain size: (1) ASTM grain size (GS) and (2) mean linear intercept (MLI) GS. The advantage of MLI GS is that it relates to a physical dimension in the microstructure (mean distance between grain intersections for random lines drawn on the 2-dimensional cross-section of the microstructure) and is reported herein in units of micrometers (μm). On the other hand, the ASTM GS sometimes enables better comparison of the standard deviation from large grain sizes to small grain sizes. Thus we will provide here the formulae to convert between MLI and ASTM GS as desired.
 
 ASTM E112 defines grain size number, G as $N_{AE}=2^{G-1}$ where $N_{AE}$ is the number of grains per square inch at 100X magnification. To obtain the number per square millimeter at 1X, multiply by 15.50. For relating ASTM grain size number, G, to mean linear intercept, L, ASTM E112 defines G such that G=0 when L=320 μm. Thus, $G=10-2*LOG_2(L/10)$ and $L=320*2^{-G/2}$ for L in micrometers (μm).
 
-## Dark Phase (DP)  
+## Dark Phase  
 
 Dark phase was quantified using a comparison method developed by PG&E and Exponent. First, the amount of dark phase in several microstructures at several magnifications was quantified using image analysis and the ASTM E562 point counting method. Then, these images were incorporated into a tool built into a Microsoft Excel document for comparison with sample microstructures. The comparison microstructure with the amount of dark phase that most closely matches the sample is chosen at first. Then, interpolation is performed to increase the resolution for the amount of dark phase, depending on whether the sample appears to have more or less dark phase than the comparison micrograph.
 
